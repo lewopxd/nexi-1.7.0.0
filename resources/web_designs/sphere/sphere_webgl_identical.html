@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sphere v5.76 - WebGL Identical</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+    <style>
+        * {
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -webkit-user-drag: none !important;
+        }
+        ::selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
+        ::-moz-selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
+
+        :root {
+            --panel-accent-color: rgba(0, 255, 255, 1);
+            --panel-accent-color-translucent: rgba(0, 255, 255, 0.2);
+            --container-border-color: rgba(0, 255, 255, 0.4);
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background: #000;
+            color: var(--panel-accent-color);
+            font-family: 'Inter', monospace;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            outline: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+        }
+
+        #widget-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            outline: none !important;
+        }
+
+        #panel-wrapper {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        #panel-wrapper.is-hidden {
+            transform: translateX(-120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #panel {
+            position: relative;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            width: 305px;
+            min-width: 305px;
+            max-width: 600px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #panel::-webkit-scrollbar { width: 4px; }
+        #panel::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); border-radius: 10px; }
+        #panel::-webkit-scrollbar-thumb { background-color: var(--panel-accent-color); border-radius: 10px; border: 1px solid rgba(0,0,0,0.8); }
+        #panel::-webkit-scrollbar-thumb:hover { background-color: #5ff; }
+
+        #open-panel-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            transform: none;
+            z-index: 2;
+            background: rgba(0,0,0,0.9);
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #open-panel-btn.is-visible { opacity: 1; pointer-events: auto; }
+        #open-panel-btn svg { width: 16px; height: 16px; fill: var(--panel-accent-color); }
+
+        #close-panel-btn {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            background: rgba(0,0,0,0.9);
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+        }
+        #close-panel-btn svg { width: 14px; height: 14px; fill: var(--panel-accent-color); }
+
+        #panel-resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 10px;
+            cursor: ew-resize;
+            background: transparent;
+            z-index: 4;
+        }
+
+        .row, .row2, .row3 { display: grid; gap: 10px; align-items: center; width: 100%; }
+        .row2 { grid-template-columns: 1fr 1fr; }
+        .row3 { grid-template-columns: 1fr; }
+        .row { grid-template-columns: 1fr 1fr 1fr; }
+
+        .giro-container { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; width: 100%; justify-content: center; }
+        .giro-item, .control-bordered-item, .rand-lat, .rand-lon, .rand-rad { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--container-border-color); padding: 15px 8px 8px; border-radius: 8px; flex: 1; position: relative; gap: 8px; }
+        .item-title { position: absolute; top: -8px; left: 10px; background: rgba(0,0,0,0.9); padding: 0 5px; font-size: 12px; color: var(--panel-accent-color); z-index: 4; white-space: nowrap; }
+        .control { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+        .angle-display-control { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .speed-control-wrapper { display: flex; align-items: center; width: 100%; gap: 5px; position: relative; }
+        .speed-control-slider-container { flex-grow: 1; display: flex; align-items: center; gap: 5px; position: relative; width: 100%; }
+        .control-row { display: flex; align-items: center; gap: 6px; }
+        .line-controls-container { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+        .curve-controls-row { display: flex; align-items: center; width: 100%; gap: 5px; }
+        .inc-decr-stack { display: flex; flex-direction: column; gap: 2px; }
+
+        input[type=text] { background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; color: var(--panel-accent-color); padding: 6px; width: 35px; text-align: center; -moz-appearance: textfield; font-size: 10px; }
+        input[type=text].wide-input { width: 100%; box-sizing: border-box; }
+        input[type=text]::-webkit-outer-spin-button, input[type=text]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .btn { background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; padding: 4px 10px; display: flex; align-items: center; justify-content: center; color: var(--panel-accent-color); cursor: pointer; user-select: none; font-size: 14px; height: 30px; transition: background-color 0.2s, color 0.2s; }
+        .btn:hover { background-color: var(--panel-accent-color); color: #000; }
+        .small-btn { padding: 0 6px; height: 13px; font-size: 10px; line-height: 1; }
+
+        input[type=range] { -webkit-appearance: none; width: 100%; height: 2px; background: transparent; margin-top: 0; flex-grow: 1; }
+        input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--panel-accent-color); border-radius: 1px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #000; border: 1px solid var(--panel-accent-color); border-radius: 50%; margin-top: -5px; cursor: grab; transition: background-color 0.2s, border-color 0.2s; }
+        input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; }
+        input[type=range]:focus { outline: none; }
+
+        hr { border: none; border-top: 0.4px solid var(--panel-accent-color); width: 100%; margin: 15px 0; }
+        .subsection-divider { margin-bottom: 25px; }
+        .select-btn { appearance: none; -webkit-appearance: none; background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; color: var(--panel-accent-color); cursor: pointer; user-select: none; font-size: 12px; height: 24px; transition: background-color 0.2s, color 0.2s; }
+        .select-btn:hover { background-color: var(--panel-accent-color); color: #000; }
+        select.select-btn { background-image: url('data:image/svg+xml;utf8,<svg fill="%2300ffff" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>'); background-repeat: no-repeat; background-position: right 5px center; background-size: 12px; padding-right: 20px; }
+        select.select-btn option { background-color: #000; color: var(--panel-accent-color); }
+
+        .custom-tooltip { position: fixed; background: rgba(0, 0, 0, 0.9); color: var(--panel-accent-color); padding: 5px 8px; border-radius: 4px; font-size: 11px; z-index: 1000; pointer-events: none; white-space: nowrap; }
+        .speed-control-slider-container .min-value, .speed-control-slider-container .max-value { font-size: 10px; color: var(--panel-accent-color); user-select: none; white-space: nowrap; }
+        .slider-thumb-value { position: absolute; background: rgba(0, 0, 0, 0.7); color: var(--panel-accent-color); padding: 2px 5px; border-radius: 4px; font-size: 10px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); top: -19px; display: none; z-index: 5; }
+        .multiplier-control-group { width: 100%; margin-top: 10px; padding: 0 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+        .collapsible-section { width: 100%; display: flex; flex-direction: row; align-items: flex-start; gap: 5px; }
+        .section-header { display: flex; align-items: center; cursor: pointer; user-select: none; padding-top: 5px; flex-shrink: 0; position: relative; height: 20px; }
+        .arrow-icon { width: 16px; height: 16px; fill: var(--panel-accent-color); transition: transform 0.3s ease; }
+        .section-title { display: none; font-size: 12px; font-weight: bold; }
+        .section-content { flex-grow: 1; max-height: 1000px; overflow: hidden; transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out, padding-top 0.4s ease-in-out; opacity: 1; padding-top: 10px; }
+        #animation-section > .section-content { display: flex; flex-direction: column; gap: 10px; }
+        .collapsible-section.collapsed .arrow-icon { transform: rotate(-90deg); }
+        .collapsible-section.collapsed .section-title { display: inline; position: absolute; left: 20px; top: 50%; transform: translateY(-50%); white-space: nowrap; font-weight: normal; }
+        .collapsible-section.collapsed .section-content { max-height: 0; opacity: 0; pointer-events: none; padding-top: 0; }
+        .collapsible-section.collapsed + hr { margin: 5px 0; }
+
+        .checkbox-title { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; }
+        .checkbox-title input[type="checkbox"]{ appearance: none; width: 14px; height: 14px; border: 1px solid var(--panel-accent-color); border-radius: 3px; cursor: pointer; position: relative; top: 1px; }
+        .checkbox-title input[type="checkbox"]:checked { background-color: var(--panel-accent-color); }
+        .checkbox-title input[type="checkbox"]:checked::after { content: '✔'; color: #000; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 10px; }
+        .curve-control { gap: 3px; }
+        .curve-control input { width: 12px; height: 12px; }
+        .curve-control input:checked::after { font-size: 8px; }
+
+        .angle-input-wrapper { display: flex; align-items: center; border: 1px solid var(--panel-accent-color); border-radius: 6px; padding-left: 6px; }
+        .angle-input-wrapper input { border: none; padding: 6px 0; width: 35px; text-align: right; }
+        .degree-symbol { font-size: 14px; line-height: 1; padding-right: 4px; }
+        .color-container { display: flex; gap: 10px; align-items: center; width: 100%; }
+        .color-preview { width: 20px; height: 20px; border: 1px solid var(--panel-accent-color); border-radius: 4px; flex-shrink: 0; cursor: pointer; }
+        .color-sliders { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+        .speed-control-slider-container .min-value { min-width: 10px; text-align: right; }
+        .twist-controls { display: flex; justify-content: space-around; align-items: center; width: 100%; }
+        .direction-toggle-btn { background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+        .direction-toggle-btn:hover { background-color: var(--panel-accent-color-translucent); }
+        .direction-toggle-btn svg { width: 16px; height: 16px; fill: var(--panel-accent-color); }
+        .auto-control-wrapper { display: flex; justify-content: center; align-items: center; width: calc(100% - 21px); box-sizing: border-box; border: 1px solid var(--panel-accent-color); border-radius: 8px; padding: 8px 12px; font-size: 12px; gap: 10px; margin-left: 21px; }
+    </style>
+</head>
+<body>
+<div id="container">
+    <canvas id="sphere"></canvas>
+    <canvas id="widget-canvas"></canvas>
+
+    <button id="open-panel-btn" data-tooltip="Open controls panel">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+    </button>
+
+    <div id="panel-wrapper" class="is-hidden">
+        <div id="panel">
+            <div class="collapsible-section">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Appearance</span>
+                </div>
+                <div class="section-content">
+                    <div class="row">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Adjust the size of individual dots">DotsSize</span>
+                            <div class="control">
+                                <div class="control-row">
+                                    <input id="dotSize" type="text" value="0.5">
+                                    <div class="inc-decr-stack">
+                                        <button class="btn small-btn" id="dotSize-incr">+</button>
+                                        <button class="btn small-btn" id="dotSize-decr">-</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Number of subdivisions (0-5)">Subdivisions</span>
+                            <div class="control">
+                                <div class="control-row">
+                                    <input id="subdivisions" type="text" value="3">
+                                    <div class="inc-decr-stack">
+                                        <button class="btn small-btn" id="subdivisions-incr">+</button>
+                                        <button class="btn small-btn" id="subdivisions-decr">-</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Total number of dots (read-only)">Ndots</span>
+                            <div class="control">
+                                <div class="control-row">
+                                    <input id="nDots" type="text" value="0" readonly style="background: rgba(0,255,255,0.1); width: 45px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="control-bordered-item">
+                        <span class="item-title checkbox-title" data-tooltip="Toggle visibility of connecting lines">
+                           <input type="checkbox" id="showLines" checked>
+                           Show Lines
+                       </span>
+                       <div class="row2" style="margin-top: 10px;">
+                           <div class="control-bordered-item">
+                               <span class="item-title" data-tooltip="Adjust line thickness">Width</span>
+                               <div class="control">
+                                   <div class="control-row" style="justify-content: center;">
+                                       <input id="lineWidth" type="text" value="0.5">
+                                       <div class="inc-decr-stack">
+                                           <button class="btn small-btn" id="lineWidth-incr">+</button>
+                                           <button class="btn small-btn" id="lineWidth-decr">-</button>
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="control-bordered-item">
+                               <span class="item-title checkbox-title" data-tooltip="Toggle curved lines">
+                                   <input type="checkbox" id="curveLines">
+                                   Curve
+                               </span>
+                               <div class="speed-control-slider-container">
+                                   <input id="lineCurveIntensity" type="range" min="-100" max="100" value="0">
+                                   <div class="slider-thumb-value">0</div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+                    <hr class="subsection-divider">
+
+                    <div class="row2">
+                        <div class="control-bordered-item">
+                            <span class="item-title">Twist</span>
+                            <div class="twist-controls">
+                                <label class="checkbox-title" data-tooltip="Enable/disable the twist effect">
+                                    <input type="checkbox" id="enableTwist">
+                                    On
+                                </label>
+                                <button id="twistDirBtn" class="direction-toggle-btn" data-tooltip="Toggle twist direction"></button>
+                            </div>
+                        </div>
+                         <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Adjust twist intensity">Twist Power</span>
+                            <div class="speed-control-slider-container">
+                                <input id="twistIntensity" type="range" min="0" max="200" value="50">
+                                <div class="slider-thumb-value">50</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="subsection-divider">
+
+                    <div class="row2">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Color for the northern hemisphere">Color 1 (N)</span>
+                            <div class="color-container">
+                                <div class="color-preview" id="color1-preview" style="background-color: var(--panel-accent-color);"></div>
+                                <input type="color" id="color1-picker" style="display: none;" value="#00ffff">
+                                <div class="color-sliders">
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">R</span>
+                                        <input id="color1R" type="range" min="0" max="255" value="0" step="1">
+                                        <div class="slider-thumb-value">0</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">G</span>
+                                        <input id="color1G" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">B</span>
+                                        <input id="color1B" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">A</span>
+                                        <input id="color1A" type="range" min="0" max="1" value="1" step="0.01">
+                                        <div class="slider-thumb-value">1</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Color for the southern hemisphere">Color 2 (S)</span>
+                            <div class="color-container">
+                                <div class="color-preview" id="color2-preview" style="background-color: var(--panel-accent-color);"></div>
+                                <input type="color" id="color2-picker" style="display: none;" value="#00ffff">
+                                <div class="color-sliders">
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">R</span>
+                                        <input id="color2R" type="range" min="0" max="255" value="0" step="1">
+                                        <div class="slider-thumb-value">0</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">G</span>
+                                        <input id="color2G" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">B</span>
+                                        <input id="color2B" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">A</span>
+                                        <input id="color2A" type="range" min="0" max="1" value="1" step="0.01">
+                                        <div class="slider-thumb-value">1</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+
+                    <!-- Backgrounds Section -->
+                    <div class="collapsible-section collapsed">
+                        <div class="section-header">
+                             <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                             <span class="section-title">Backgrounds</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="row2">
+                                <div class="control-bordered-item">
+                                    <span class="item-title">Body Background</span>
+                                    <div class="color-container" style="padding-top: 10px;">
+                                        <div class="color-preview" id="bgColor-preview" style="background-color: rgb(0,0,0);"></div>
+                                        <input type="color" id="bgColor-picker" style="display: none;" value="#000000">
+                                        <div class="color-sliders">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">R</span>
+                                                <input id="bgColorR" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">G</span>
+                                                <input id="bgColorG" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">B</span>
+                                                <input id="bgColorB" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">A</span>
+                                                <input id="bgColorA" type="range" min="0" max="1" value="1" step="0.01">
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="control-bordered-item">
+                                    <span class="item-title checkbox-title" data-tooltip="Enable/disable sphere background aura">
+                                        <input type="checkbox" id="sphereBgEnabled">
+                                        Sphere Aura
+                                    </span>
+                                    <div class="color-container" style="padding-top: 10px;">
+                                        <div class="color-preview" id="sphereBgColor-preview" style="background-color: rgba(0,255,255,0.5);"></div>
+                                        <input type="color" id="sphereBgColor-picker" style="display: none;" value="#00ffff">
+                                         <div class="color-sliders">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">R</span>
+                                                <input id="sphereBgColorR" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">G</span>
+                                                <input id="sphereBgColorG" type="range" min="0" max="255" value="255" step="1">
+                                                <div class="slider-thumb-value">255</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">B</span>
+                                                <input id="sphereBgColorB" type="range" min="0" max="255" value="255" step="1">
+                                                <div class="slider-thumb-value">255</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">A</span>
+                                                <input id="sphereBgColorA" type="range" min="0" max="1" value="0.5" step="0.01">
+                                                <div class="slider-thumb-value">0.5</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item" style="width: 100%; margin-top: 10px; padding-top: 15px;">
+                                         <span class="item-title" data-tooltip="Spread of the central color in the gradient">Expansion</span>
+                                         <div class="speed-control-slider-container">
+                                            <input id="sphereBgSpread" type="range" min="0" max="100" value="10">
+                                            <div class="slider-thumb-value">10</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="collapsible-section collapsed">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Camera</span>
+                </div>
+                <div class="section-content">
+                    <div class="row" style="grid-template-columns: 1fr 1fr auto; align-items: center;">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Control the zoom level of the sphere">Zoom</span>
+                            <div class="control">
+                                <div class="speed-control-slider-container" id="zoomContainer">
+                                    <span class="min-value">1</span>
+                                    <input id="zoom" type="range" min="1" max="100" value="50">
+                                    <span class="max-value">100</span>
+                                    <div class="slider-thumb-value">50</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Adjust the overall size of the sphere on screen (%)">Size %</span>
+                            <div class="control">
+                                <div class="speed-control-slider-container" id="sizeContainer">
+                                    <span class="min-value">10</span>
+                                    <input id="size" type="range" min="10" max="100" value="100">
+                                    <span class="max-value">100</span>
+                                    <div class="slider-thumb-value">100</div>
+                                </div>
+                            </div>
+                        </div>
+                        <label class="checkbox-title" data-tooltip="Enable mouse drag and wheel zoom" style="font-size: 10px; padding-left: 5px;">
+                            <input type="checkbox" id="enableMouseDrag" checked>
+                            Mouse
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="collapsible-section collapsed">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Randomness</span>
+                </div>
+                <div class="section-content">
+                    <div class="row">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Randomness in the latitude (vertical position) of dots">Rndm (θ)</span>
+                            <div class="control"><label for="latRandom"></label><input id="latRandom" type="range" min="0" max="100" value="0"></div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Randomness in the longitude (horizontal position) of dots">Rndm (φ)</span>
+                            <div class="control"><label for="lonRandom"></label><input id="lonRandom" type="range" min="0" max="100" value="0"></div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Randomness in the radius (distance from center) of dots">Rndm (α)</span>
+                            <div class="control"><label for="latRandom"></label><input id="radRandom" type="range" min="0" max="100" value="0"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div id="animation-section" class="collapsible-section collapsed">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Animation</span>
+                </div>
+                <div class="section-content">
+                    <div class="auto-control-wrapper">
+                        <span>Auto</span>
+                        <button id="auto-anim-toggle-btn" class="direction-toggle-btn"></button>
+                    </div>
+                    <div class="collapsible-section">
+                        <div class="section-header">
+                            <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                            <span class="section-title">Rotation</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="row3">
+                                <div class="giro-container">
+                                    <div class="giro-item">
+                                        <span class="item-title" data-tooltip="Rotation angle and speed for X-axis">Giro X</span>
+                                        <div class="control">
+                                            <select id="giroX" class="select-btn">
+                                                <option value="0">NO</option>
+                                                <option value="1" selected>→</option>
+                                                <option value="-1">←</option>
+                                            </select>
+                                        </div>
+                                        <div class="angle-display-control">
+                                            <div class="angle-input-wrapper">
+                                                <input id="giroXAngle" type="text" value="0.00">
+                                                <span class="degree-symbol">°</span>
+                                            </div>
+                                        </div>
+                                        <div class="speed-control-wrapper">
+                                            <div class="speed-control-slider-container" id="giroXSpeedContainer">
+                                                <span class="min-value">0</span>
+                                                <input id="giroXSpeed" type="range" min="0" max="100" value="6">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">6</div>
+                                            </div>
+                                        </div>
+                                        <div class="multiplier-control-group" data-tooltip="Multiplies the speed for X-axis (1-100)">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">1</span>
+                                                <input id="giroXMultiplier" type="range" min="1" max="100" value="1" step="1">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="giro-item">
+                                        <span class="item-title" data-tooltip="Rotation angle and speed for Y-axis">Giro Y</span>
+                                        <div class="control">
+                                            <select id="giroY" class="select-btn">
+                                                <option value="0">NO</option>
+                                                <option value="1" selected>→</option>
+                                                <option value="-1">←</option>
+                                            </select>
+                                        </div>
+                                        <div class="angle-display-control">
+                                            <div class="angle-input-wrapper">
+                                                <input id="giroYAngle" type="text" value="0.00">
+                                                <span class="degree-symbol">°</span>
+                                            </div>
+                                        </div>
+                                        <div class="speed-control-wrapper">
+                                            <div class="speed-control-slider-container" id="giroYSpeedContainer">
+                                                <span class="min-value">0</span>
+                                                <input id="giroYSpeed" type="range" min="0" max="100" value="8">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">8</div>
+                                            </div>
+                                        </div>
+                                        <div class="multiplier-control-group" data-tooltip="Multiplies the speed for Y-axis (1-100)">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">1</span>
+                                                <input id="giroYMultiplier" type="range" min="1" max="100" value="1" step="1">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="giro-item">
+                                        <span class="item-title" data-tooltip="Rotation angle and speed for Z-axis">Giro Z</span>
+                                        <div class="control">
+                                            <select id="giroZ" class="select-btn">
+                                                <option value="0">NO</option>
+                                                <option value="1">→</option>
+                                                <option value="-1" selected>←</option>
+                                            </select>
+                                        </div>
+                                        <div class="angle-display-control">
+                                            <div class="angle-input-wrapper">
+                                                <input id="giroZAngle" type="text" value="0.00">
+                                                <span class="degree-symbol">°</span>
+                                            </div>
+                                        </div>
+                                        <div class="speed-control-wrapper">
+                                            <div class="speed-control-slider-container" id="giroZSpeedContainer">
+                                                <span class="min-value">0</span>
+                                                <input id="giroZSpeed" type="range" min="0" max="100" value="20">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">20</div>
+                                            </div>
+                                        </div>
+                                        <div class="multiplier-control-group" data-tooltip="Multiplies the speed for Z-axis (1-100)">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">1</span>
+                                                <input id="giroZMultiplier" type="range" min="1" max="100" value="1" step="1">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="collapsible-section collapsed">
+                        <div class="section-header">
+                            <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                            <span class="section-title">Effects</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="control-bordered-item">
+                            <span class="item-title checkbox-title" data-tooltip="Enable/Disable the pulse effect">
+                                <input type="checkbox" id="enablePulse" checked>
+                                Pulse
+                            </span>
+                                <div class="row2" style="margin-top: 10px;">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Speed of the pulse animation">Speed</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="pulseSpeed" type="range" min="1" max="500" value="56">
+                                            <div class="slider-thumb-value">56</div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Amplitude of the size change">Radius</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="pulseRadius" type="range" min="0" max="100" step="1" value="27">
+                                            <div class="slider-thumb-value">27</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px; width: 100%;">
+                                    <select id="pulseType" class="select-btn" data-tooltip="Select the type of pulse animation" style="width: 100%;">
+                                        <option value="bounce">Bounce</option>
+                                        <option value="rebound">Rebound</option>
+                                        <option value="heartbeat">Heartbeat</option>
+                                        <option value="breathe">Breathe</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Morph Section -->
+                            <div class="control-bordered-item" style="margin-top: 10px;">
+                                <span class="item-title checkbox-title">
+                                    <input type="checkbox" id="morphicEffects">
+                                    Morph (Waves)
+                                </span>
+                                <div class="row2" style="margin-top: 10px; align-items: center;">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Number of wave emitters">Nº Waves</span>
+                                        <div class="control">
+                                            <div class="control-row">
+                                                <input id="waveCount" type="text" value="5">
+                                                <div class="inc-decr-stack">
+                                                    <button class="btn small-btn" id="waveCount-incr">+</button>
+                                                    <button class="btn small-btn" id="waveCount-decr">-</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Overall wave intensity">Intensity</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveIntensity" type="range" min="0" max="100" value="50">
+                                            <div class="slider-thumb-value">50</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row3" style="margin-top: 10px;">
+                                     <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Global wave speed multiplier">Speed</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveSpeed" type="range" min="0" max="100" value="50">
+                                            <div class="slider-thumb-value">50</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row2" style="margin-top: 10px;">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Global wave amplitude multiplier">Amplitude</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveAmplitude" type="range" min="0" max="100" value="50">
+                                            <div class="slider-thumb-value">50</div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Wave frequency (tightness)">Frequency</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveFrequency" type="range" min="1" max="50" value="10">
+                                            <div class="slider-thumb-value">10</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button id="close-panel-btn" data-tooltip="Close controls panel">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+        </button>
+        <div id="panel-resize-handle" data-tooltip="Drag to resize panel"></div>
+    </div>
+</div>
+
+<!-- Shaders -->
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec3 aPosition;
+attribute float aTheta;
+attribute float aRandR;
+
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform float uTime;
+uniform float uDotSize;
+uniform bool uEnableTwist;
+uniform float uTwistIntensity;
+uniform float uTwistDir;
+uniform bool uEnablePulse;
+uniform float uPulseSpeed;
+uniform float uPulseRadius;
+uniform int uPulseType;
+uniform bool uMorphicEffects;
+uniform float uWaveIntensity;
+uniform float uWaveSpeed;
+uniform float uWaveAmplitude;
+uniform float uWaveFrequency;
+uniform int uWaveCount;
+uniform vec4 uWaveEmitters[20];
+uniform float uRadRandom;
+uniform vec4 uColor1;
+uniform vec4 uColor2;
+uniform vec2 uThetaRange;
+
+varying vec4 vColor;
+
+float getPulseOffset() {
+    float pulsePhase = uTime * uPulseSpeed * 0.0002;
+    if (uPulseType == 0) return sin(pulsePhase); // bounce
+    if (uPulseType == 1) return abs(sin(pulsePhase)); // rebound
+    if (uPulseType == 2) { // heartbeat
+        float t = mod(pulsePhase, 2.5);
+        if (t < 0.25) return sin(t * 12.566);
+        if (t >= 0.35 && t < 0.55) return 0.6 * sin((t - 0.35) * 15.708);
+        return 0.0;
+    }
+    if (uPulseType == 3) { // breathe
+        return sin(pulsePhase * 0.7);
+    }
+    return 0.0;
+}
+
+void main() {
+    vec3 pos = aPosition;
+    
+    // Apply Twist
+    if (uEnableTwist) {
+        float maxTwistAngle = (uTwistIntensity / 100.0) * 6.28318;
+        float normalizedLatitude = aPosition.z;
+        float twistAngle = normalizedLatitude * maxTwistAngle * uTwistDir;
+        float s = sin(twistAngle);
+        float c = cos(twistAngle);
+        mat2 rotation = mat2(c, -s, s, c);
+        pos.xy = rotation * pos.xy;
+    }
+    
+    // Apply Morphic Effects
+    if (uMorphicEffects) {
+        float waveDisplacement = 0.0;
+        for (int i = 0; i < 20; i++) {
+            if (i < uWaveCount) {
+                vec3 emitterPos = uWaveEmitters[i].xyz;
+                float phase = uWaveEmitters[i].w + uTime * uWaveSpeed * 0.0001;
+                float dist = distance(pos, emitterPos);
+                waveDisplacement += sin(phase - dist * uWaveFrequency * 0.2) * uWaveAmplitude * 0.02;
+            }
+        }
+        pos *= (1.0 + waveDisplacement * (uWaveIntensity / 100.0));
+    }
+    
+    // Apply Radius Randomness
+    float radiusFactor = 1.0 - (uRadRandom / 100.0) * aRandR;
+    pos *= radiusFactor;
+    
+    // Apply Pulse
+    if (uEnablePulse) {
+        float pulseOffset = getPulseOffset() * (uPulseRadius / 100.0);
+        pos *= (1.0 + pulseOffset);
+    }
+    
+    gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(pos, 1.0);
+    gl_PointSize = uDotSize * 2.0 * (1.0 + gl_Position.w * 2.0);
+    
+    float colorFactor = clamp((aTheta - uThetaRange.x) / uThetaRange.y, 0.0, 1.0);
+    vColor = mix(uColor2, uColor1, colorFactor);
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+uniform bool uIsDrawingPoints;
+
+void main() {
+    if (uIsDrawingPoints) {
+        vec2 coord = gl_PointCoord - vec2(0.5);
+        if (length(coord) > 0.5) {
+            discard;
+        }
+    }
+    gl_FragColor = vColor;
+}
+</script>
+
+<script src="../nexi-orchester/js/nexi_bus.js"></script>
+<script>
+// WebGL Implementation - Identical to Canvas 2D version
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('sphere');
+    const gl = canvas.getContext('webgl', { antialias: true });
+    const widgetCanvas = document.getElementById('widget-canvas');
+    const widgetCtx = widgetCanvas ? widgetCanvas.getContext('2d') : null;
+    
+    if (!gl) {
+        alert('WebGL no disponible');
+        return;
+    }
+    
+    // State variables
+    let animationFrameId = null;
+    let angleX = 0, angleY = 0, angleZ = 0;
+    let pulsePhase = 0;
+    let waveEffects = [];
+    let buffers = null;
+    let shaderProgram, programInfo;
+
+    // Text & Widgets Orbit System
+    const textParams = {
+        enabled: true,
+        widgetType: 'clock', // 'clock' | 'custom'
+        clockFormat: '24h',  // '24h' | '12h'
+        showSeconds: true,
+        clockSuffix: ' • NEXI AI • ',
+        customText: 'NEXI SYSTEM ONLINE • 2026 • ',
+        textSize: 13,
+        textRadius: 1.25,
+        textSpeed: 1.8,
+        textTilt: 16,
+        textColor: '#00d5ff',
+        textGlow: 8,
+        depthFade: true,
+        repeats: 2
+    };
+    let orbitAngle = 0;
+    
+    // Parameters - IDENTICAL to original
+    const params = {
+        zoom: 75,
+        dotSize: 0.01,
+        subdivisions: 3,
+        size: 100,
+        rotX: 1, rotY: 1, rotZ: -1,
+        speedX: 6, speedY: 8, speedZ: 10,
+        speedMultiplierX: 1, speedMultiplierY: 1, speedMultiplierZ: 1,
+        latRandom: 0, lonRandom: 0, radRandom: 0,
+        showLines: true,
+        lineWidth: 0.5,
+        curveLines: false,
+        lineCurveIntensity: 0,
+        enableTwist: false,
+        twistIntensity: 50,
+        twistDir: 1,
+        enableMouseDrag: true,
+        enablePulse: true,
+        pulseSpeed: 20,
+        pulseRadius: 4,
+        pulseType: 'bounce',
+        morphicEffects: false,
+        waveIntensity: 50,
+        waveCount: 5,
+        waveSpeed: 50,
+        waveAmplitude: 50,
+        waveFrequency: 10,
+        isAnimationPaused: false,
+        color1: { r: 0, g: 213, b: 255, a: 1 },
+        color2: { r: 0, g: 213, b: 255, a: 1 }
+    };
+    
+    const styleParams = {
+        bgColor: { r: 0, g: 0, b: 0, a: 0 },
+        sphereBgEnabled: false,
+        sphereBgColor: { r: 0, g: 255, b: 255, a: 0.5 },
+        sphereBgSpread: 10
+    };
+    
+    
+
+    // Matrix utilities
+    const mat4 = {
+        create: () => new Float32Array(16),
+        identity: (out) => {
+            out[0] = 1; out[1] = 0; out[2] = 0; out[3] = 0;
+            out[4] = 0; out[5] = 1; out[6] = 0; out[7] = 0;
+            out[8] = 0; out[9] = 0; out[10] = 1; out[11] = 0;
+            out[12] = 0; out[13] = 0; out[14] = 0; out[15] = 1;
+            return out;
+        },
+        perspective: (out, fovy, aspect, near, far) => {
+            const f = 1.0 / Math.tan(fovy / 2);
+            out[0] = f / aspect; out[1] = 0; out[2] = 0; out[3] = 0;
+            out[4] = 0; out[5] = f; out[6] = 0; out[7] = 0;
+            out[8] = 0; out[9] = 0; out[10] = (far + near) / (near - far); out[11] = -1;
+            out[12] = 0; out[13] = 0; out[14] = (2 * far * near) / (near - far); out[15] = 0;
+            return out;
+        },
+        translate: (out, a, v) => {
+            out[12] = a[0] * v[0] + a[4] * v[1] + a[8] * v[2] + a[12];
+            out[13] = a[1] * v[0] + a[5] * v[1] + a[9] * v[2] + a[13];
+            out[14] = a[2] * v[0] + a[6] * v[1] + a[10] * v[2] + a[14];
+            out[15] = a[3] * v[0] + a[7] * v[1] + a[11] * v[2] + a[15];
+            return out;
+        },
+        rotate: (out, a, rad, axis) => {
+            let x = axis[0], y = axis[1], z = axis[2], len = Math.hypot(x, y, z);
+            if (len < 1e-6) return null;
+            len = 1 / len; x *= len; y *= len; z *= len;
+            const s = Math.sin(rad), c = Math.cos(rad), t = 1 - c;
+            const [a00, a01, a02, a03, a10, a11, a12, a13, a20, a21, a22, a23] = a;
+            const [b00, b01, b02, b10, b11, b12, b20, b21, b22] = [x*x*t+c, y*x*t+z*s, z*x*t-y*s, x*y*t-z*s, y*y*t+c, z*y*t+x*s, x*z*t+y*s, y*z*t-x*s, z*z*t+c];
+            out[0] = a00*b00 + a10*b01 + a20*b02; out[1] = a01*b00 + a11*b01 + a21*b02; out[2] = a02*b00 + a12*b01 + a22*b02; out[3] = a03*b00 + a13*b01 + a23*b02;
+            out[4] = a00*b10 + a10*b11 + a20*b12; out[5] = a01*b10 + a11*b11 + a21*b12; out[6] = a02*b10 + a12*b11 + a22*b12; out[7] = a03*b10 + a13*b11 + a23*b12;
+            out[8] = a00*b20 + a10*b21 + a20*b22; out[9] = a01*b20 + a11*b21 + a21*b22; out[10] = a02*b20 + a12*b21 + a22*b22; out[11] = a03*b20 + a13*b21 + a23*b22;
+                     if (a !== out) { out[12]=a[12]; out[13]=a[13]; out[14]=a[14]; out[15]=a[15]; }
+         return out;
+     },
+     scale: (out, a, v) => {
+         out[0] = a[0] * v[0]; out[1] = a[1] * v[0]; out[2] = a[2] * v[0]; out[3] = a[3] * v[0];
+         out[4] = a[4] * v[1]; out[5] = a[5] * v[1]; out[6] = a[6] * v[1]; out[7] = a[7] * v[1];
+         out[8] = a[8] * v[2]; out[9] = a[9] * v[2]; out[10] = a[10] * v[2]; out[11] = a[11] * v[2];
+         out[12] = a[12]; out[13] = a[13]; out[14] = a[14]; out[15] = a[15];
+         return out;
+     }
+    };
+    
+    // Initialize WebGL
+    function initWebGL(vertexShaderSource, fragmentShaderSource) {
+        if (!gl) {
+            console.error('WebGL not supported');
+            return;
+        }
+        
+        gl.clearColor(0.0, 0.0, 0.0, 0.0);
+        gl.clearDepth(1.0);
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        
+        // Create shader program
+        shaderProgram = initShaderProgram(gl, vertexShaderSource, fragmentShaderSource);
+        if (!shaderProgram) {
+            console.error('Failed to create shader program');
+            return;
+        }
+        
+        // Get attribute and uniform locations
+        programInfo = {
+            attribLocations: {
+                position: gl.getAttribLocation(shaderProgram, 'aPosition'),
+                theta: gl.getAttribLocation(shaderProgram, 'aTheta'),
+                randR: gl.getAttribLocation(shaderProgram, 'aRandR')
+            },
+            uniformLocations: {
+                projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
+                modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+                time: gl.getUniformLocation(shaderProgram, 'uTime'),
+                dotSize: gl.getUniformLocation(shaderProgram, 'uDotSize'),
+                enableTwist: gl.getUniformLocation(shaderProgram, 'uEnableTwist'),
+                twistIntensity: gl.getUniformLocation(shaderProgram, 'uTwistIntensity'),
+                twistDir: gl.getUniformLocation(shaderProgram, 'uTwistDir'),
+                enablePulse: gl.getUniformLocation(shaderProgram, 'uEnablePulse'),
+                pulseSpeed: gl.getUniformLocation(shaderProgram, 'uPulseSpeed'),
+                pulseRadius: gl.getUniformLocation(shaderProgram, 'uPulseRadius'),
+                pulseType: gl.getUniformLocation(shaderProgram, 'uPulseType'),
+                radRandom: gl.getUniformLocation(shaderProgram, 'uRadRandom'),
+                morphicEffects: gl.getUniformLocation(shaderProgram, 'uMorphicEffects'),
+                waveIntensity: gl.getUniformLocation(shaderProgram, 'uWaveIntensity'),
+                waveSpeed: gl.getUniformLocation(shaderProgram, 'uWaveSpeed'),
+                waveAmplitude: gl.getUniformLocation(shaderProgram, 'uWaveAmplitude'),
+                waveFrequency: gl.getUniformLocation(shaderProgram, 'uWaveFrequency'),
+                waveCount: gl.getUniformLocation(shaderProgram, 'uWaveCount'),
+                waveEmitters: gl.getUniformLocation(shaderProgram, 'uWaveEmitters'),
+                color1: gl.getUniformLocation(shaderProgram, 'uColor1'),
+                color2: gl.getUniformLocation(shaderProgram, 'uColor2'),
+                thetaRange: gl.getUniformLocation(shaderProgram, 'uThetaRange'),
+                isDrawingPoints: gl.getUniformLocation(shaderProgram, 'uIsDrawingPoints')
+            },
+            thetaRange: [0, Math.PI * 2]
+        };
+    }
+    
+    function initShaderProgram(gl, vsSource, fsSource) {
+        const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        
+        const shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+        
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            console.error('Shader program error: ' + gl.getProgramInfoLog(shaderProgram));
+            return null;
+        }
+        return shaderProgram;
+    }
+    
+    function loadShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error('Shader error: ' + gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
+    }
+    
+         // Generate icosphere geometry
+     function generateIcosphere(subdivisions) {
+         const phi = (1 + Math.sqrt(5)) / 2;
+         const norm = Math.sqrt(1 + phi * phi);
+         
+         let vertices = [
+             -1 / norm, phi / norm, 0,  1 / norm, phi / norm, 0,  -1 / norm, -phi / norm, 0,  1 / norm, -phi / norm, 0,
+             0, -1 / norm, phi / norm,  0, 1 / norm, phi / norm,  0, -1 / norm, -phi / norm,  0, 1 / norm, -phi / norm,
+             phi / norm, 0, -1 / norm,  phi / norm, 0, 1 / norm,  -phi / norm, 0, -1 / norm,  -phi / norm, 0, 1 / norm
+         ];
+         
+         let faces = [
+             0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11,
+             1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+             3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9,
+             4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1
+         ];
+         
+         // Subdivide
+         for (let i = 0; i < subdivisions; i++) {
+             const newFaces = [];
+             for (let j = 0; j < faces.length; j += 3) {
+                 const v1 = faces[j];
+                 const v2 = faces[j + 1];
+                 const v3 = faces[j + 2];
+                 
+                 const v12 = addMidpoint(vertices, v1, v2);
+                 const v23 = addMidpoint(vertices, v2, v3);
+                 const v31 = addMidpoint(vertices, v3, v1);
+                 
+                 newFaces.push(v1, v12, v31);
+                 newFaces.push(v12, v2, v23);
+                 newFaces.push(v31, v23, v3);
+                 newFaces.push(v12, v23, v31);
+             }
+             faces = newFaces;
+         }
+         
+         return { vertices, faces };
+     }
+
+     // Add midpoint between two vertices
+     function addMidpoint(vertices, v1, v2) {
+         const x1 = vertices[v1 * 3];
+         const y1 = vertices[v1 * 3 + 1];
+         const z1 = vertices[v1 * 3 + 2];
+         
+         const x2 = vertices[v2 * 3];
+         const y2 = vertices[v2 * 3 + 1];
+         const z2 = vertices[v2 * 3 + 2];
+         
+         const x = (x1 + x2) / 2;
+         const y = (y1 + y2) / 2;
+         const z = (z1 + z2) / 2;
+         
+         const length = Math.sqrt(x * x + y * y + z * z);
+         
+         vertices.push(x / length, y / length, z / length);
+         return vertices.length / 3 - 1;
+     }
+
+     // Initialize buffers
+     function initBuffers() {
+         // Generate icosphere
+         const icosphere = generateIcosphere(params.subdivisions);
+         
+         // Create position buffer
+         buffers.position = gl.createBuffer();
+         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(icosphere.vertices), gl.STATIC_DRAW);
+         
+         // Create attribute buffer (theta and randR)
+         const attributes = new Float32Array(icosphere.vertices.length / 3 * 2);
+         for (let i = 0; i < icosphere.vertices.length / 3; i++) {
+             const x = icosphere.vertices[i * 3];
+             const y = icosphere.vertices[i * 3 + 1];
+             const z = icosphere.vertices[i * 3 + 2];
+             
+             // Calculate theta (latitude)
+             const theta = Math.acos(Math.max(-1, Math.min(1, y)));
+             attributes[i * 2] = theta;
+             
+             // Calculate randR (random radius factor)
+             const baseRadius = Math.sqrt(x * x + z * z);
+             const latRandomFactor = 1 + (params.latRandom / 100) * (Math.random() - 0.5);
+             const lonRandomFactor = 1 + (params.lonRandom / 100) * (Math.random() - 0.5);
+             const radRandomFactor = 1 + (params.radRandom / 100) * (Math.random() - 0.5);
+             
+             let finalRadius = baseRadius * latRandomFactor * lonRandomFactor * radRandomFactor;
+             
+             // Apply twist effect
+             if (params.enableTwist) {
+                 const twistAmount = params.twistIntensity * Math.sin(theta * params.twistDir);
+                 finalRadius += twistAmount * 0.1;
+             }
+             
+             attributes[i * 2 + 1] = finalRadius;
+         }
+         
+         buffers.attribute = gl.createBuffer();
+         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.attribute);
+         gl.bufferData(gl.ARRAY_BUFFER, attributes, gl.STATIC_DRAW);
+         
+         // Create line index buffer
+         const lineIndices = [];
+         for (let i = 0; i < icosphere.faces.length; i += 3) {
+             const v1 = icosphere.faces[i];
+             const v2 = icosphere.faces[i + 1];
+             const v3 = icosphere.faces[i + 2];
+             
+             // Add edges of the triangle
+             lineIndices.push(v1, v2);
+             lineIndices.push(v2, v3);
+             lineIndices.push(v3, v1);
+         }
+         
+         buffers.lineIndex = gl.createBuffer();
+         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.lineIndex);
+         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(lineIndices), gl.STATIC_DRAW);
+         
+         buffers.vertexCount = icosphere.vertices.length / 3;
+         buffers.lineIndexCount = lineIndices.length;
+     }
+
+     // Initialize wave effects
+     function initWaveEffects() {
+         waveEffects = [];
+         for (let i = 0; i < params.waveCount; i++) {
+             waveEffects.push({
+                 x: (Math.random() - 0.5) * 2,
+                 y: (Math.random() - 0.5) * 2,
+                 z: (Math.random() - 0.5) * 2,
+                 phase: Math.random() * Math.PI * 2
+             });
+         }
+     }
+
+     // Resize canvas to display size
+     function resizeCanvasToDisplaySize(canvas) {
+         const displayWidth = Math.floor(canvas.clientWidth * window.devicePixelRatio);
+         const displayHeight = Math.floor(canvas.clientHeight * window.devicePixelRatio);
+         
+         if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+             canvas.width = displayWidth;
+             canvas.height = displayHeight;
+             return true;
+         }
+         return false;
+     }
+
+     // Render loop
+     function render(time) {
+         time = time || 0;
+         
+         // Update state
+         if (!params.isAnimationPaused) {
+             if (params.enablePulse) {
+                 pulsePhase += (time * 0.001) * (params.pulseSpeed / 50.0);
+             }
+             if (params.morphicEffects) {
+                 waveEffects.forEach(wave => wave.phase += wave.speed * time * 0.1 * (params.waveSpeed / 50));
+             }
+
+             if (!isDragging) {
+                 const speedX = params.rotX * (params.speedX / 100) * 0.005 * params.speedMultiplierX;
+                 const speedY = params.rotY * (params.speedY / 100) * 0.005 * params.speedMultiplierY;
+                 const speedZ = params.rotZ * (params.speedZ / 100) * 0.005 * params.speedMultiplierZ;
+                 angleX = (angleX + speedX) % (2 * Math.PI);
+                 angleY = (angleY + speedY) % (2 * Math.PI);
+                 angleZ = (angleZ + speedZ) % (2 * Math.PI);
+             }
+         }
+         
+         if (document.activeElement.id !== 'giroXAngle') document.getElementById('giroXAngle').value = (angleX * 180 / Math.PI).toFixed(2);
+         if (document.activeElement.id !== 'giroYAngle') document.getElementById('giroYAngle').value = (angleY * 180 / Math.PI).toFixed(2);
+         if (document.activeElement.id !== 'giroZAngle') document.getElementById('giroZAngle').value = (angleZ * 180 / Math.PI).toFixed(2);
+
+         // WebGL drawing
+         resizeCanvasToDisplaySize(gl.canvas);
+         if (widgetCanvas) {
+             resizeCanvasToDisplaySize(widgetCanvas);
+         }
+         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+         const bgColor = styleParams.bgColor;
+         gl.clearColor(bgColor.r/255, bgColor.g/255, bgColor.b/255, bgColor.a);
+         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+         gl.enable(gl.BLEND);
+         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+         // Matrices
+         const fieldOfView = 45 * Math.PI / 180;
+         const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+         const projectionMatrix = mat4.perspective(mat4.create(), fieldOfView, aspect, 0.1, 100.0);
+
+         const modelViewMatrix = mat4.identity(mat4.create());
+         mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -6.0 * (101 - params.zoom) / 50]);
+         mat4.rotate(modelViewMatrix, modelViewMatrix, angleX, [1, 0, 0]);
+         mat4.rotate(modelViewMatrix, modelViewMatrix, angleY, [0, 1, 0]);
+         mat4.rotate(modelViewMatrix, modelViewMatrix, angleZ, [0, 0, 1]);
+         const scale = params.size / 100;
+         mat4.scale(modelViewMatrix, modelViewMatrix, [scale, scale, scale]);
+
+         // Bind buffers
+         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+         gl.vertexAttribPointer(programInfo.attribLocations.position, 3, gl.FLOAT, false, 0, 0);
+         gl.enableVertexAttribArray(programInfo.attribLocations.position);
+
+         gl.bindBuffer(gl.ARRAY_BUFFER, buffers.attribute);
+         gl.vertexAttribPointer(programInfo.attribLocations.theta, 1, gl.FLOAT, false, 8, 0);
+         gl.enableVertexAttribArray(programInfo.attribLocations.theta);
+         gl.vertexAttribPointer(programInfo.attribLocations.randR, 1, gl.FLOAT, false, 8, 4);
+         gl.enableVertexAttribArray(programInfo.attribLocations.randR);
+
+         gl.useProgram(shaderProgram);
+
+         // Set uniforms
+         gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix);
+         gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix);
+         gl.uniform1f(programInfo.uniformLocations.time, time);
+         gl.uniform1f(programInfo.uniformLocations.dotSize, params.dotSize);
+         gl.uniform1i(programInfo.uniformLocations.enableTwist, params.enableTwist);
+         gl.uniform1f(programInfo.uniformLocations.twistIntensity, params.twistIntensity);
+         gl.uniform1f(programInfo.uniformLocations.twistDir, params.twistDir);
+         gl.uniform1i(programInfo.uniformLocations.enablePulse, params.enablePulse);
+         gl.uniform1f(programInfo.uniformLocations.pulseSpeed, params.pulseSpeed);
+         gl.uniform1f(programInfo.uniformLocations.pulseRadius, params.pulseRadius);
+         
+         const pulseTypeMap = { 'bounce': 0, 'rebound': 1, 'heartbeat': 2, 'breathe': 3 };
+         gl.uniform1i(programInfo.uniformLocations.pulseType, pulseTypeMap[params.pulseType] || 0);
+         
+         gl.uniform1i(programInfo.uniformLocations.morphicEffects, params.morphicEffects);
+         gl.uniform1f(programInfo.uniformLocations.waveIntensity, params.waveIntensity);
+         gl.uniform1f(programInfo.uniformLocations.waveSpeed, params.waveSpeed);
+         gl.uniform1f(programInfo.uniformLocations.waveAmplitude, params.waveAmplitude);
+         gl.uniform1f(programInfo.uniformLocations.waveFrequency, params.waveFrequency);
+         gl.uniform1i(programInfo.uniformLocations.waveCount, params.waveCount);
+         
+         const waveData = new Float32Array(20 * 4);
+         for(let i=0; i < params.waveCount; i++) {
+             waveData[i*4 + 0] = waveEffects[i].x;
+             waveData[i*4 + 1] = waveEffects[i].y;
+             waveData[i*4 + 2] = waveEffects[i].z;
+             waveData[i*4 + 3] = waveEffects[i].phase;
+         }
+         gl.uniform4fv(programInfo.uniformLocations.waveEmitters, waveData);
+         
+         gl.uniform1f(programInfo.uniformLocations.radRandom, params.radRandom);
+         gl.uniform4f(programInfo.uniformLocations.color1, params.color1.r/255, params.color1.g/255, params.color1.b/255, params.color1.a);
+         gl.uniform4f(programInfo.uniformLocations.color2, params.color2.r/255, params.color2.g/255, params.color2.b/255, params.color2.a);
+         gl.uniform2fv(programInfo.uniformLocations.thetaRange, programInfo.thetaRange);
+
+         // Draw
+         if (params.showLines && buffers.lineIndexCount > 0) {
+             gl.uniform1i(programInfo.uniformLocations.isDrawingPoints, false);
+             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.lineIndex);
+             gl.lineWidth(params.lineWidth);
+             gl.drawElements(gl.LINES, buffers.lineIndexCount, gl.UNSIGNED_SHORT, 0);
+         }
+
+         gl.uniform1i(programInfo.uniformLocations.isDrawingPoints, true);
+         gl.drawArrays(gl.POINTS, 0, buffers.vertexCount);
+
+         // Renderizar anillo de texto 3D / Widget de hora
+         renderTextWidget(projectionMatrix, modelViewMatrix, gl.canvas.width, gl.canvas.height);
+
+         animationFrameId = requestAnimationFrame(render);
+     }
+
+     // Proyección de puntos 3D a coordenadas 2D de pantalla con profundidad de cámara
+     function projectPointToScreen(v, modelView, proj, width, height) {
+         const x = v[0], y = v[1], z = v[2];
+         const vx = modelView[0]*x + modelView[4]*y + modelView[8]*z + modelView[12];
+         const vy = modelView[1]*x + modelView[5]*y + modelView[9]*z + modelView[13];
+         const vz = modelView[2]*x + modelView[6]*y + modelView[10]*z + modelView[14];
+         const vw = modelView[3]*x + modelView[7]*y + modelView[11]*z + modelView[15];
+
+         const cx = proj[0]*vx + proj[4]*vy + proj[8]*vz + proj[12]*vw;
+         const cy = proj[1]*vx + proj[5]*vy + proj[9]*vz + proj[13]*vw;
+         const cz = proj[2]*vx + proj[6]*vy + proj[10]*vz + proj[14]*vw;
+         const cw = proj[3]*vx + proj[7]*vy + proj[11]*vz + proj[15]*vw;
+
+         if (cw <= 0.001) return null;
+
+         const ndcX = cx / cw;
+         const ndcY = cy / cw;
+         return {
+             sx: (ndcX * 0.5 + 0.5) * width,
+             sy: (1.0 - (ndcY * 0.5 + 0.5)) * height,
+             vz: vz,
+             cw: cw
+         };
+     }
+
+    // Rotación 3D del plano orbital (Pitch sobre eje X, Yaw sobre eje Y)
+    // Sistema de Renderizado de Widgets / Texto 3D en Órbita
+    function renderTextWidget(projMatrix, mvMatrix, canvasWidth, canvasHeight) {
+        if (!widgetCtx) return;
+        if (!textParams.enabled) {
+            widgetCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            return;
+        }
+
+        widgetCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+        if (!params.isAnimationPaused) {
+            orbitAngle += (textParams.textSpeed || 1.8) * 0.006;
+        }
+
+        let baseString = '';
+        if (textParams.widgetType === 'clock') {
+            const now = new Date();
+            let h = now.getHours();
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            if (textParams.clockFormat === '12h') {
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                h = h % 12 || 12;
+                const hh = String(h).padStart(2, '0');
+                baseString = `${hh}:${m}${textParams.showSeconds ? ':' + s : ''} ${ampm}${textParams.clockSuffix || ' • NEXI AI • '}`;
+            } else {
+                const hh = String(h).padStart(2, '0');
+                baseString = `${hh}:${m}${textParams.showSeconds ? ':' + s : ''}${textParams.clockSuffix || ' • NEXI AI • '}`;
+            }
+        } else {
+            baseString = textParams.customText || 'NEXI SYSTEM ONLINE • ';
+        }
+
+        let fullString = '';
+        const rep = Math.max(1, Math.min(4, Math.round(textParams.repeats || 2)));
+        for (let r = 0; r < rep; r++) {
+            fullString += baseString;
+        }
+
+        const totalChars = fullString.length;
+        if (totalChars === 0) return;
+
+        const tiltRad = (textParams.textTilt || 0) * Math.PI / 180;
+        const cosTilt = Math.cos(tiltRad);
+        const sinTilt = Math.sin(tiltRad);
+        const radius = textParams.textRadius || 1.25;
+
+        const charItems = [];
+        const vzCenter = -6.0 * (101 - params.zoom) / 50;
+
+        for (let i = 0; i < totalChars; i++) {
+            const char = fullString[i];
+            const theta = orbitAngle + (i / totalChars) * Math.PI * 2;
+            const thetaNext = theta + 0.02;
+
+            const x = radius * Math.cos(theta);
+            const y = radius * Math.sin(theta) * sinTilt;
+            const z = radius * Math.sin(theta) * cosTilt;
+
+            const xN = radius * Math.cos(thetaNext);
+            const yN = radius * Math.sin(thetaNext) * sinTilt;
+            const zN = radius * Math.sin(thetaNext) * cosTilt;
+
+            const p1 = projectPointToScreen([x, y, z], mvMatrix, projMatrix, canvasWidth, canvasHeight);
+            const p2 = projectPointToScreen([xN, yN, zN], mvMatrix, projMatrix, canvasWidth, canvasHeight);
+
+            if (!p1 || !p2) continue;
+
+            const angle = Math.atan2(p2.sy - p1.sy, p2.sx - p1.sx);
+            const isFront = p1.vz > vzCenter;
+
+            let alpha = 1.0;
+            if (textParams.depthFade) {
+                if (isFront) {
+                    alpha = 1.0;
+                } else {
+                    const depthFactor = Math.max(0, Math.min(1, (p1.vz - (vzCenter - radius)) / radius));
+                    alpha = 0.2 + 0.35 * depthFactor;
+                }
+            }
+
+            const distRatio = Math.abs(vzCenter) / Math.abs(p1.vz);
+            const basePx = (textParams.textSize || 13) * (window.devicePixelRatio || 1);
+            const computedSize = Math.max(8, basePx * distRatio);
+
+            charItems.push({
+                char,
+                sx: p1.sx,
+                sy: p1.sy,
+                vz: p1.vz,
+                angle,
+                alpha,
+                computedSize,
+                isFront
+            });
+        }
+
+        // Ordenar de atrás hacia adelante para profundidad 3D
+        charItems.sort((a, b) => a.vz - b.vz);
+
+        for (const item of charItems) {
+            if (item.char === ' ') continue;
+            widgetCtx.save();
+            widgetCtx.translate(item.sx, item.sy);
+            widgetCtx.rotate(item.angle);
+            widgetCtx.font = `600 ${item.computedSize}px "Inter", monospace`;
+            widgetCtx.textAlign = 'center';
+            widgetCtx.textBaseline = 'middle';
+            widgetCtx.globalAlpha = item.alpha;
+            widgetCtx.fillStyle = textParams.textColor || '#00d5ff';
+
+            if (item.isFront && (textParams.textGlow || 0) > 0) {
+                widgetCtx.shadowColor = textParams.textColor || '#00d5ff';
+                widgetCtx.shadowBlur = (textParams.textGlow || 8) * (window.devicePixelRatio || 1);
+            } else {
+                widgetCtx.shadowBlur = 0;
+            }
+
+            widgetCtx.fillText(item.char, 0, 0);
+            widgetCtx.restore();
+        }
+    }
+
+     // Mouse interaction variables
+     let isDragging = false;
+     let lastMouseX, lastMouseY;
+     let autoRotationState = {};
+
+     // Mouse event handlers
+     function isMouseOverSphere(e) {
+         const centerX = window.innerWidth / 2;
+         const centerY = window.innerHeight / 2;
+         const screenRadius = 100 * (params.zoom / 50);
+         return Math.hypot(e.clientX - centerX, e.clientY - centerY) <= screenRadius;
+     }
+
+     canvas.addEventListener('mousedown', e => {
+         if (!params.enableMouseDrag || !isMouseOverSphere(e)) return;
+         isDragging = true;
+         canvas.style.cursor = 'grabbing';
+         lastMouseX = e.clientX;
+         lastMouseY = e.clientY;
+         autoRotationState = { rotX: params.rotX, rotY: params.rotY, rotZ: params.rotZ };
+         params.rotX = 0; params.rotY = 0; params.rotZ = 0;
+     });
+
+     window.addEventListener('mouseup', (e) => {
+         if (!isDragging) return;
+         isDragging = false;
+         if (params.enableMouseDrag) canvas.style.cursor = isMouseOverSphere(e) ? 'grab' : 'default';
+         Object.assign(params, autoRotationState);
+     });
+
+     window.addEventListener('mousemove', e => {
+         if (isDragging) {
+             const deltaX = e.clientX - lastMouseX;
+             const deltaY = e.clientY - lastMouseY;
+             angleY += deltaX * 0.005;
+             angleX += deltaY * 0.005;
+             lastMouseX = e.clientX;
+             lastMouseY = e.clientY;
+         } else if (params.enableMouseDrag) {
+             canvas.style.cursor = isMouseOverSphere(e) ? 'grab' : 'default';
+         }
+     });
+
+     canvas.addEventListener('wheel', e => {
+         if (!params.enableMouseDrag) return;
+         e.preventDefault();
+         params.zoom = Math.max(1, Math.min(100, params.zoom - (e.deltaY > 0 ? 1 : -1) ));
+         document.getElementById('zoom').value = params.zoom;
+     });
+
+     // Initialize everything
+     function initialize() {
+         // Initialize buffers object
+         buffers = {};
+         
+         // Get shader sources
+         const vertexShaderSource = document.getElementById('vertex-shader').textContent;
+         const fragmentShaderSource = document.getElementById('fragment-shader').textContent;
+         
+         initWebGL(vertexShaderSource, fragmentShaderSource);
+         initBuffers();
+         initWaveEffects();
+         
+         if(params.enableMouseDrag) canvas.style.cursor = 'grab';
+         
+         // Initialize UI values
+         document.getElementById('dotSize').value = params.dotSize.toFixed(1);
+         document.getElementById('subdivisions').value = params.subdivisions;
+         document.getElementById('zoom').value = params.zoom;
+         document.getElementById('size').value = params.size;
+         document.getElementById('giroXSpeed').value = params.speedX;
+         document.getElementById('giroYSpeed').value = params.speedY;
+         document.getElementById('giroZSpeed').value = params.speedZ;
+         document.getElementById('giroXMultiplier').value = params.speedMultiplierX;
+         document.getElementById('giroYMultiplier').value = params.speedMultiplierY;
+         document.getElementById('giroZMultiplier').value = params.speedMultiplierZ;
+         document.getElementById('lineWidth').value = params.lineWidth.toFixed(1);
+         document.getElementById('twistIntensity').value = params.twistIntensity;
+         document.getElementById('pulseSpeed').value = params.pulseSpeed;
+         document.getElementById('pulseRadius').value = params.pulseRadius;
+         document.getElementById('waveIntensity').value = params.waveIntensity;
+         document.getElementById('waveCount').value = params.waveCount;
+         document.getElementById('waveSpeed').value = params.waveSpeed;
+         document.getElementById('waveAmplitude').value = params.waveAmplitude;
+         document.getElementById('waveFrequency').value = params.waveFrequency;
+         document.getElementById('latRandom').value = params.latRandom;
+         document.getElementById('lonRandom').value = params.lonRandom;
+         document.getElementById('radRandom').value = params.radRandom;
+         
+         // Initialize checkboxes
+         document.getElementById('showLines').checked = params.showLines;
+         document.getElementById('curveLines').checked = params.curveLines;
+         document.getElementById('enableTwist').checked = params.enableTwist;
+         document.getElementById('enablePulse').checked = params.enablePulse;
+         document.getElementById('morphicEffects').checked = params.morphicEffects;
+         document.getElementById('enableMouseDrag').checked = params.enableMouseDrag;
+         
+         // Initialize select dropdowns
+         document.getElementById('giroX').value = params.rotX;
+         document.getElementById('giroY').value = params.rotY;
+         document.getElementById('giroZ').value = params.rotZ;
+         document.getElementById('pulseType').value = params.pulseType;
+         
+         // Start render loop
+         animationFrameId = requestAnimationFrame(render);
+     }
+
+     // Start the application
+     initialize();
+
+
+
+     // Event listeners for all controls
+     document.getElementById('dotSize').addEventListener('input', e => params.dotSize = +e.target.value);
+     document.getElementById('dotSize-incr').addEventListener('click', () => {
+         params.dotSize = parseFloat((params.dotSize + 0.1).toFixed(2));
+         document.getElementById('dotSize').value = params.dotSize.toFixed(1);
+     });
+     document.getElementById('dotSize-decr').addEventListener('click', () => {
+         params.dotSize = parseFloat(Math.max(0.0, params.dotSize - 0.1).toFixed(2));
+         document.getElementById('dotSize').value = params.dotSize.toFixed(1);
+     });
+
+     document.getElementById('subdivisions').addEventListener('input', e => {
+         params.subdivisions = Math.max(0, Math.min(5, +e.target.value));
+         initBuffers();
+     });
+     document.getElementById('subdivisions-incr').addEventListener('click', () => {
+         params.subdivisions = Math.min(5, params.subdivisions + 1);
+         document.getElementById('subdivisions').value = params.subdivisions;
+         initBuffers();
+     });
+     document.getElementById('subdivisions-decr').addEventListener('click', () => {
+         params.subdivisions = Math.max(0, params.subdivisions - 1);
+         document.getElementById('subdivisions').value = params.subdivisions;
+         initBuffers();
+     });
+
+     document.getElementById('zoom').addEventListener('input', e => params.zoom = +e.target.value);
+     document.getElementById('size').addEventListener('input', e => params.size = +e.target.value);
+     document.getElementById('giroX').addEventListener('change', e => params.rotX = +e.target.value);
+     document.getElementById('giroY').addEventListener('change', e => params.rotY = +e.target.value);
+     document.getElementById('giroZ').addEventListener('change', e => params.rotZ = +e.target.value);
+     document.getElementById('giroXSpeed').addEventListener('input', e => params.speedX = +e.target.value);
+     document.getElementById('giroYSpeed').addEventListener('input', e => params.speedY = +e.target.value);
+     document.getElementById('giroZSpeed').addEventListener('input', e => params.speedZ = +e.target.value);
+     document.getElementById('giroXMultiplier').addEventListener('input', e => params.speedMultiplierX = +e.target.value);
+     document.getElementById('giroYMultiplier').addEventListener('input', e => params.speedMultiplierY = +e.target.value);
+     document.getElementById('giroZMultiplier').addEventListener('input', e => params.speedMultiplierZ = +e.target.value);
+     
+     // Angle inputs
+     const giroXAngleInput = document.getElementById('giroXAngle');
+     const giroYAngleInput = document.getElementById('giroYAngle');
+     const giroZAngleInput = document.getElementById('giroZAngle');
+     
+     [giroXAngleInput, giroYAngleInput, giroZAngleInput].forEach((input, index) => {
+         input.addEventListener('input', (e) => {
+             const val = parseFloat(e.target.value);
+             if (!isNaN(val)) {
+                 if (index === 0) angleX = val * Math.PI / 180;
+                 if (index === 1) angleY = val * Math.PI / 180;
+                 if (index === 2) angleZ = val * Math.PI / 180;
+             }
+         });
+         input.addEventListener('blur', (e) => {
+             let angleRef = (index === 0) ? angleX : (index === 1) ? angleY : angleZ;
+             e.target.value = (angleRef * 180 / Math.PI).toFixed(2);
+         });
+     });
+
+     document.getElementById('showLines').addEventListener('change', e => params.showLines = e.target.checked);
+     document.getElementById('curveLines').addEventListener('change', e => params.curveLines = e.target.checked);
+     document.getElementById('lineCurveIntensity').addEventListener('input', e => params.lineCurveIntensity = +e.target.value);
+     document.getElementById('lineWidth').addEventListener('input', e => params.lineWidth = +e.target.value);
+     
+     // Line width increment/decrement
+     document.getElementById('lineWidth-incr').addEventListener('click', () => {
+         params.lineWidth = parseFloat((params.lineWidth + 0.1).toFixed(2));
+         document.getElementById('lineWidth').value = params.lineWidth.toFixed(1);
+     });
+     document.getElementById('lineWidth-decr').addEventListener('click', () => {
+         params.lineWidth = parseFloat(Math.max(0.1, params.lineWidth - 0.1).toFixed(2));
+         document.getElementById('lineWidth').value = params.lineWidth.toFixed(1);
+     });
+
+     document.getElementById('enableTwist').addEventListener('change', e => {
+         params.enableTwist = e.target.checked;
+         initBuffers();
+     });
+     document.getElementById('twistIntensity').addEventListener('input', e => {
+         params.twistIntensity = +e.target.value;
+         initBuffers();
+     });
+
+     document.getElementById('enablePulse').addEventListener('change', e => params.enablePulse = e.target.checked);
+     document.getElementById('pulseSpeed').addEventListener('input', e => params.pulseSpeed = +e.target.value);
+     document.getElementById('pulseRadius').addEventListener('input', e => params.pulseRadius = +e.target.value);
+     document.getElementById('pulseType').addEventListener('change', e => params.pulseType = e.target.value);
+
+     document.getElementById('morphicEffects').addEventListener('change', e => params.morphicEffects = e.target.checked);
+     document.getElementById('waveIntensity').addEventListener('input', e => params.waveIntensity = +e.target.value);
+     document.getElementById('waveSpeed').addEventListener('input', e => params.waveSpeed = +e.target.value);
+     document.getElementById('waveAmplitude').addEventListener('input', e => params.waveAmplitude = +e.target.value);
+     document.getElementById('waveFrequency').addEventListener('input', e => params.waveFrequency = +e.target.value);
+     document.getElementById('waveCount').addEventListener('input', e => {
+         params.waveCount = Math.max(1, Math.min(20, +e.target.value));
+         initWaveEffects();
+     });
+     
+     // Wave count increment/decrement
+     document.getElementById('waveCount-incr').addEventListener('click', () => {
+         params.waveCount = Math.min(20, params.waveCount + 1);
+         document.getElementById('waveCount').value = params.waveCount;
+         initWaveEffects();
+     });
+     document.getElementById('waveCount-decr').addEventListener('click', () => {
+         params.waveCount = Math.max(1, params.waveCount - 1);
+         document.getElementById('waveCount').value = params.waveCount;
+         initWaveEffects();
+     });
+
+     document.getElementById('enableMouseDrag').addEventListener('change', e => params.enableMouseDrag = e.target.checked);
+
+     // Color controls
+     document.getElementById('color1R').addEventListener('input', e => { params.color1.r = +e.target.value; updateColorPreview(1); });
+     document.getElementById('color1G').addEventListener('input', e => { params.color1.g = +e.target.value; updateColorPreview(1); });
+     document.getElementById('color1B').addEventListener('input', e => { params.color1.b = +e.target.value; updateColorPreview(1); });
+     document.getElementById('color1A').addEventListener('input', e => { params.color1.a = +e.target.value; updateColorPreview(1); });
+     document.getElementById('color2R').addEventListener('input', e => { params.color2.r = +e.target.value; updateColorPreview(2); });
+     document.getElementById('color2G').addEventListener('input', e => { params.color2.g = +e.target.value; updateColorPreview(2); });
+     document.getElementById('color2B').addEventListener('input', e => { params.color2.b = +e.target.value; updateColorPreview(2); });
+     document.getElementById('color2A').addEventListener('input', e => { params.color2.a = +e.target.value; updateColorPreview(2); });
+
+     // Color picker event listeners
+     const color1Picker = document.getElementById('color1-picker');
+     const color2Picker = document.getElementById('color2-picker');
+     
+     if (color1Picker) {
+         color1Picker.addEventListener('change', e => {
+             const color = hexToRgb(e.target.value);
+             if (color) {
+                 params.color1.r = color.r;
+                 params.color1.g = color.g;
+                 params.color1.b = color.b;
+                 updateColorPreview(1);
+                 updateRgbaSliders(params.color1, 
+                     document.getElementById('color1R'), 
+                     document.getElementById('color1G'), 
+                     document.getElementById('color1B'), 
+                     document.getElementById('color1A'));
+             }
+         });
+     }
+     
+     if (color2Picker) {
+         color2Picker.addEventListener('change', e => {
+             const color = hexToRgb(e.target.value);
+             if (color) {
+                 params.color2.r = color.r;
+                 params.color2.g = color.g;
+                 params.color2.b = color.b;
+                 updateColorPreview(2);
+                 updateRgbaSliders(params.color2, 
+                     document.getElementById('color2R'), 
+                     document.getElementById('color2G'), 
+                     document.getElementById('color2B'), 
+                     document.getElementById('color2A'));
+             }
+         });
+     }
+
+     // Helper function to convert hex to RGB
+     function hexToRgb(hex) {
+         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+         return result ? {
+             r: parseInt(result[1], 16),
+             g: parseInt(result[2], 16),
+             b: parseInt(result[3], 16)
+         } : null;
+     }
+
+     // Randomness controls
+     document.getElementById('latRandom').addEventListener('input', e => params.latRandom = +e.target.value);
+     document.getElementById('lonRandom').addEventListener('input', e => params.lonRandom = +e.target.value);
+     document.getElementById('radRandom').addEventListener('input', e => params.radRandom = +e.target.value);
+
+     // Panel controls
+     document.querySelectorAll('.section-header').forEach(header => {
+         header.addEventListener('click', () => header.parentElement.classList.toggle('collapsed'));
+     });
+
+     const panelWrapper = document.getElementById('panel-wrapper');
+     const openBtn = document.getElementById('open-panel-btn');
+     const closeBtn = document.getElementById('close-panel-btn');
+     
+     closeBtn.addEventListener('click', () => {
+         panelWrapper.classList.add('is-hidden');
+         openBtn.classList.add('is-visible');
+     });
+     
+     openBtn.addEventListener('click', () => {
+         panelWrapper.classList.remove('is-hidden');
+         openBtn.classList.remove('is-visible');
+     });
+
+     // Panel resize
+     const panel = document.getElementById('panel');
+     const resizeHandle = document.getElementById('panel-resize-handle');
+     let isResizing = false, startX, startWidth;
+     
+     resizeHandle.addEventListener('mousedown', (e) => {
+         isResizing = true; startX = e.clientX; startWidth = panel.offsetWidth;
+         document.body.style.userSelect = 'none'; document.body.style.cursor = 'ew-resize';
+     });
+     
+     document.addEventListener('mousemove', (e) => {
+         if (!isResizing) return;
+         panel.style.width = `${Math.min(600, Math.max(305, startWidth + (e.clientX - startX)))}px`;
+     });
+     
+     document.addEventListener('mouseup', () => {
+         isResizing = false; document.body.style.userSelect = ''; document.body.style.cursor = '';
+     });
+
+     // Tooltips
+     let currentTooltip = null;
+     document.querySelectorAll('[data-tooltip]').forEach(element => {
+         element.addEventListener('mouseenter', (e) => {
+             if (currentTooltip) currentTooltip.remove();
+             const tooltipText = element.dataset.tooltip;
+             if (tooltipText) {
+                 currentTooltip = document.createElement('div');
+                 currentTooltip.classList.add('custom-tooltip');
+                 currentTooltip.textContent = tooltipText;
+                 document.body.appendChild(currentTooltip);
+                 updateTooltipPosition(e);
+             }
+         });
+         element.addEventListener('mousemove', (e) => { if (currentTooltip) updateTooltipPosition(e); });
+         element.addEventListener('mouseleave', () => { if (currentTooltip) { currentTooltip.remove(); currentTooltip = null; } });
+     });
+
+     function updateTooltipPosition(e) {
+         if (currentTooltip) {
+             const offsetX = 15, offsetY = 20;
+             let newLeft = e.clientX + offsetX;
+             let newTop = e.clientY - offsetY;
+             if (newLeft + currentTooltip.offsetWidth > window.innerWidth - 10) newLeft = e.clientX - currentTooltip.offsetWidth - offsetX;
+             if (newTop < 10) newTop = e.clientY + offsetY;
+             currentTooltip.style.left = `${newLeft}px`;
+             currentTooltip.style.top = `${newTop}px`;
+         }
+     }
+
+     // Color preview functions
+     function updateColorPreview(num) {
+         let color, preview;
+         if (num === 1) { [color, preview] = [params.color1, document.getElementById('color1-preview')]; }
+         else if (num === 2) { [color, preview] = [params.color2, document.getElementById('color2-preview')]; }
+         if (preview) {
+             preview.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
+         }
+     }
+
+     // Initialize color previews
+     updateColorPreview(1);
+     updateColorPreview(2);
+
+     // Function to update RGBA sliders from color picker
+     function updateRgbaSliders(color, rInput, gInput, bInput, aInput) {
+         if (rInput) rInput.value = Math.round(color.r);
+         if (gInput) gInput.value = Math.round(color.g);
+         if (bInput) bInput.value = Math.round(color.b);
+         if (aInput) aInput.value = color.a;
+     }
+     
+     // Initialize slider values
+     document.querySelectorAll('input[type=range]').forEach(slider => {
+         const container = slider.closest('.speed-control-slider-container');
+         if (container) {
+             const maxValSpan = container.querySelector('.max-value');
+             if (maxValSpan) maxValSpan.textContent = slider.max;
+         }
+     });
+
+     // Window resize
+     window.addEventListener('resize', () => {
+         resizeCanvasToDisplaySize(gl.canvas);
+     });
+
+     // Additional utility functions
+     function updateTwistDirectionUI() {
+         const twistDirBtn = document.getElementById('twistDirBtn');
+         twistDirBtn.innerHTML = params.twistDir === 1 ? 
+             '<svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>' : 
+             '<svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+     }
+
+     function updatePlayPauseUI() {
+         const isPlaying = !params.isAnimationPaused;
+         const autoAnimToggleBtn = document.getElementById('auto-anim-toggle-btn');
+         autoAnimToggleBtn.innerHTML = isPlaying ? 
+             '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>' : 
+             '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+         autoAnimToggleBtn.dataset.tooltip = isPlaying ? "Pause Animation" : "Play Animation";
+     }
+
+     // Twist direction button
+     document.getElementById('twistDirBtn').addEventListener('click', () => {
+         params.twistDir *= -1;
+         updateTwistDirectionUI();
+         initBuffers();
+     });
+
+     // Auto animation toggle
+     document.getElementById('auto-anim-toggle-btn').addEventListener('click', () => {
+         params.isAnimationPaused = !params.isAnimationPaused;
+         updatePlayPauseUI();
+     });
+
+     // Initialize UI states
+     updateTwistDirectionUI();
+     updatePlayPauseUI();
+
+     // Show panel in development mode
+     const dev_mode = true;
+     if (dev_mode) {
+         openBtn.classList.add('is-visible');
+     }
+     
+     // Background color controls
+     const bgColorRInput = document.getElementById('bgColorR');
+     const bgColorGInput = document.getElementById('bgColorG');
+     const bgColorBInput = document.getElementById('bgColorB');
+     const bgColorAInput = document.getElementById('bgColorA');
+     const bgColorPreview = document.getElementById('bgColor-preview');
+     const bgColorPicker = document.getElementById('bgColor-picker');
+     
+     if (bgColorRInput && bgColorGInput && bgColorBInput && bgColorAInput) {
+         bgColorRInput.addEventListener('input', e => { styleParams.bgColor.r = +e.target.value; applyStyleParams(); });
+         bgColorGInput.addEventListener('input', e => { styleParams.bgColor.g = +e.target.value; applyStyleParams(); });
+         bgColorBInput.addEventListener('input', e => { styleParams.bgColor.b = +e.target.value; applyStyleParams(); });
+         bgColorAInput.addEventListener('input', e => { styleParams.bgColor.a = +e.target.value; applyStyleParams(); });
+         
+         // Initialize background color values
+         bgColorRInput.value = styleParams.bgColor.r;
+         bgColorGInput.value = styleParams.bgColor.g;
+         bgColorBInput.value = styleParams.bgColor.b;
+         bgColorAInput.value = styleParams.bgColor.a;
+     }
+
+     // Background color picker event listener
+     if (bgColorPicker) {
+         bgColorPicker.addEventListener('change', e => {
+             const color = hexToRgb(e.target.value);
+             if (color) {
+                 styleParams.bgColor.r = color.r;
+                 styleParams.bgColor.g = color.g;
+                 styleParams.bgColor.b = color.b;
+                 applyStyleParams();
+                 updateRgbaSliders(styleParams.bgColor, bgColorRInput, bgColorGInput, bgColorBInput, bgColorAInput);
+             }
+         });
+     }
+     
+     function applyStyleParams() {
+         const { r, g, b, a } = styleParams.bgColor;
+         document.body.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+         if (bgColorPreview) {
+             bgColorPreview.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+         }
+     }
+     
+     // Apply initial background
+     applyStyleParams();
+
+     // Sphere background color controls
+     const sphereBgColorRInput = document.getElementById('sphereBgColorR');
+     const sphereBgColorGInput = document.getElementById('sphereBgColorG');
+     const sphereBgColorBInput = document.getElementById('sphereBgColorB');
+     const sphereBgColorAInput = document.getElementById('sphereBgColorA');
+     const sphereBgColorPreview = document.getElementById('sphereBgColor-preview');
+     const sphereBgColorPicker = document.getElementById('sphereBgColor-picker');
+
+     if (sphereBgColorRInput && sphereBgColorGInput && sphereBgColorBInput && sphereBgColorAInput) {
+         sphereBgColorRInput.addEventListener('input', e => { styleParams.sphereBgColor.r = +e.target.value; });
+         sphereBgColorGInput.addEventListener('input', e => { styleParams.sphereBgColor.g = +e.target.value; });
+         sphereBgColorBInput.addEventListener('input', e => { styleParams.sphereBgColor.b = +e.target.value; });
+         sphereBgColorAInput.addEventListener('input', e => { styleParams.sphereBgColor.a = +e.target.value; });
+         
+         // Initialize sphere background color values
+         sphereBgColorRInput.value = styleParams.sphereBgColor.r;
+         sphereBgColorGInput.value = styleParams.sphereBgColor.g;
+         sphereBgColorBInput.value = styleParams.sphereBgColor.b;
+         sphereBgColorAInput.value = styleParams.sphereBgColor.a;
+     }
+
+     // Sphere background color picker event listener
+     if (sphereBgColorPicker && sphereBgColorPreview) {
+         sphereBgColorPreview.addEventListener('click', () => sphereBgColorPicker.click());
+         sphereBgColorPicker.addEventListener('change', e => {
+             const color = hexToRgb(e.target.value);
+             if (color) {
+                 styleParams.sphereBgColor.r = color.r;
+                 styleParams.sphereBgColor.g = color.g;
+                 styleParams.sphereBgColor.b = color.b;
+                 updateRgbaSliders(styleParams.sphereBgColor, sphereBgColorRInput, sphereBgColorGInput, sphereBgColorBInput, sphereBgColorAInput);
+             }
+         });
+     }
+
+     // Sphere background enabled checkbox
+     const sphereBgEnabledCheckbox = document.getElementById('sphereBgEnabled');
+     if (sphereBgEnabledCheckbox) {
+         sphereBgEnabledCheckbox.addEventListener('change', e => {
+             styleParams.sphereBgEnabled = e.target.checked;
+             
+             // Enable/disable color controls
+             const colorInputs = [sphereBgColorRInput, sphereBgColorGInput, sphereBgColorBInput, sphereBgColorAInput];
+             colorInputs.forEach(input => {
+                 if (input) input.disabled = !e.target.checked;
+             });
+             
+             if (sphereBgColorPicker) sphereBgColorPicker.disabled = !e.target.checked;
+             if (sphereBgColorPreview) sphereBgColorPreview.style.opacity = e.target.checked ? '1' : '0.5';
+         });
+         
+         // Initialize checkbox state
+         sphereBgEnabledCheckbox.checked = styleParams.sphereBgEnabled;
+         
+         // Apply initial state
+         const colorInputs = [sphereBgColorRInput, sphereBgColorGInput, sphereBgColorBInput, sphereBgColorAInput];
+         colorInputs.forEach(input => {
+             if (input) input.disabled = !styleParams.sphereBgEnabled;
+         });
+         if (sphereBgColorPicker) sphereBgColorPicker.disabled = !styleParams.sphereBgEnabled;
+         if (sphereBgColorPreview) sphereBgColorPreview.style.opacity = styleParams.sphereBgEnabled ? '1' : '0.5';
+     }
+
+     // Sphere background spread control
+     const sphereBgSpreadInput = document.getElementById('sphereBgSpread');
+     if (sphereBgSpreadInput) {
+         sphereBgSpreadInput.addEventListener('input', e => {
+             styleParams.sphereBgSpread = +e.target.value;
+         });
+         
+         // Initialize spread value
+         sphereBgSpreadInput.value = styleParams.sphereBgSpread;
+     }
+
+     // =========================================================================
+     // NEXI BUS CLIENT INTEGRATION
+     // =========================================================================
+     if (typeof NexiBus !== 'undefined') {
+         const bus = new NexiBus('sphere', { debug: false });
+
+         // Ocultar botón flotante local si corre dentro del orquestador
+         if (window.parent && window.parent !== window) {
+             const localBtn = document.getElementById('open-panel-btn');
+             if (localBtn) localBtn.style.display = 'none';
+         }
+
+         // Devolver estado actual completo al orquestador o panel
+         bus.on('GET_STATE', async () => {
+             return {
+                 params: { ...params },
+                 styleParams: { ...styleParams },
+                 textParams: { ...textParams }
+             };
+         });
+
+         // Modificar un parámetro de texto / widget
+         bus.on('SET_TEXT_PARAM', async ({ key, value }) => {
+             if (key in textParams) {
+                 textParams[key] = value;
+                 return { success: true, key, value };
+             }
+             throw new Error(`Parámetro de texto desconocido: ${key}`);
+         });
+
+         // Modificar múltiples parámetros de texto a la vez
+         bus.on('SET_TEXT_PARAMS_BULK', async (newParams) => {
+             for (const [k, v] of Object.entries(newParams)) {
+                 if (k in textParams) {
+                     textParams[k] = v;
+                 }
+             }
+             return { success: true };
+         });
+
+         // Modificar un parámetro individual
+         bus.on('SET_PARAM', async ({ key, value }) => {
+             if (key in params) {
+                 params[key] = value;
+                 if (key === 'subdivisions' || key === 'latRandom' || key === 'lonRandom' || key === 'radRandom') {
+                     initBuffers();
+                 }
+                 return { success: true, key, value };
+             }
+             throw new Error(`Parámetro desconocido: ${key}`);
+         });
+
+         // Modificar múltiples parámetros a la vez
+         bus.on('SET_PARAMS_BULK', async (newParams) => {
+             let needRebuffer = false;
+             for (const [k, v] of Object.entries(newParams)) {
+                 if (k in params) {
+                     params[k] = v;
+                     if (k === 'subdivisions' || k === 'latRandom' || k === 'lonRandom' || k === 'radRandom') {
+                         needRebuffer = true;
+                     }
+                 }
+             }
+             if (needRebuffer) initBuffers();
+             return { success: true };
+         });
+
+         // Modificar parámetros de estilo
+         bus.on('SET_STYLE', async ({ key, value }) => {
+             if (key in styleParams) {
+                 styleParams[key] = value;
+                 return { success: true, key, value };
+             }
+             throw new Error(`Estilo desconocido: ${key}`);
+         });
+
+         // Interceptar clic derecho para activar el Menú Contextual del Orquestador
+         window.addEventListener('contextmenu', (e) => {
+             e.preventDefault();
+             try {
+                 if (window.parent && window.parent !== window && typeof window.parent.openNexiContextMenu === 'function') {
+                     const iframe = window.parent.document.getElementById('iframe-sphere');
+                     const rect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
+                     window.parent.openNexiContextMenu(rect.left + e.clientX, rect.top + e.clientY);
+                 } else if (bus) {
+                     bus.send('orchester', 'OPEN_CONTEXT_MENU', {
+                         clientX: e.clientX,
+                         clientY: e.clientY
+                     }).catch(() => {});
+                 }
+             } catch(err) {}
+         });
+
+         // Notificar al orquestador a través de NexiBus cuando el ratón entra o sale de la esfera
+         let isOverSphereReported = false;
+         function checkAndNotifyHover(isHover) {
+             if (isOverSphereReported !== isHover) {
+                 isOverSphereReported = isHover;
+                 if (bus) {
+                     bus.send('orchester', 'SPHERE_HOVER', { hovering: isHover }).catch(() => {});
+                 }
+                 try {
+                     if (window.parent && window.parent !== window && typeof window.parent.onSphereHoverChange === 'function') {
+                         window.parent.onSphereHoverChange(isHover);
+                     }
+                 } catch(e) {}
+             }
+         }
+
+         document.addEventListener('mouseenter', () => checkAndNotifyHover(true));
+         document.addEventListener('mouseleave', () => checkAndNotifyHover(false));
+         window.addEventListener('mousemove', () => checkAndNotifyHover(true));
+
+         window.sphereBus = bus;
+     }
+});
+</script>
+</body>
+</html>

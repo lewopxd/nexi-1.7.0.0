@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sphere v5.76</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --panel-accent-color: rgba(0, 255, 255, 1);
+            --panel-accent-color-translucent: rgba(0, 255, 255, 0.2);
+            --container-border-color: rgba(0, 255, 255, 0.4);
+        }
+
+        /* General styles for body and base elements */
+        body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            background: #000;
+            /* Default background */
+            color: var(--panel-accent-color);
+            font-family: 'Inter', monospace;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+
+        /* Contenedor principal que ocupa toda la ventana */
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+
+        /* Canvas para dibujar la esfera, ocupa todo el contenedor */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Wrapper para el panel y su botón de cierre */
+        #panel-wrapper {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        #panel-wrapper.is-hidden {
+            transform: translateX(-120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Panel de control */
+        #panel {
+            position: relative;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            width: 305px;
+            min-width: 305px;
+            max-width: 600px;
+            max-height: calc(100vh - 60px);
+            /* Increased bottom margin */
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* Barra de desplazamiento personalizada */
+        #panel::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #panel::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        #panel::-webkit-scrollbar-thumb {
+            background-color: var(--panel-accent-color);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.8);
+        }
+
+        #panel::-webkit-scrollbar-thumb:hover {
+            background-color: #5ff;
+        }
+
+        /* Botones para alternar el panel */
+        #open-panel-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            transform: none;
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #open-panel-btn.is-visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #open-panel-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: var(--panel-accent-color);
+        }
+
+        #close-panel-btn {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+        }
+
+        #close-panel-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: var(--panel-accent-color);
+        }
+
+        /* Handle para redimensionar */
+        #panel-resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 10px;
+            cursor: ew-resize;
+            background: transparent;
+            z-index: 4;
+        }
+
+        /* Contenedores de Grid */
+        .row,
+        .row2,
+        .row3 {
+            display: grid;
+            gap: 10px;
+            align-items: center;
+            width: 100%;
+        }
+
+        .row2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .row3 {
+            grid-template-columns: 1fr;
+        }
+
+        .row {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .giro-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .giro-item,
+        .control-bordered-item,
+        .rand-lat,
+        .rand-lon,
+        .rand-rad {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--container-border-color);
+            padding: 15px 8px 8px;
+            border-radius: 8px;
+            flex: 1;
+            position: relative;
+            gap: 8px;
+        }
+
+        .item-title {
+            position: absolute;
+            top: -8px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 0 5px;
+            font-size: 12px;
+            color: var(--panel-accent-color);
+            z-index: 4;
+            white-space: nowrap;
+        }
+
+        .control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+        }
+
+        .angle-display-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .speed-control-wrapper {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 5px;
+            position: relative;
+        }
+
+        .speed-control-slider-container {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            position: relative;
+            width: 100%;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .line-controls-container {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 100%;
+        }
+
+        .curve-controls-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 5px;
+        }
+
+        .inc-decr-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        /* Inputs y Botones */
+        input[type=text] {
+            background: transparent;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 6px;
+            color: var(--panel-accent-color);
+            padding: 6px;
+            width: 35px;
+            text-align: center;
+            -moz-appearance: textfield;
+            font-size: 10px;
+        }
+
+        input[type=text].wide-input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        input[type=text]::-webkit-outer-spin-button,
+        input[type=text]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .btn {
+            background: transparent;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 6px;
+            padding: 4px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--panel-accent-color);
+            cursor: pointer;
+            user-select: none;
+            font-size: 14px;
+            height: 30px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--panel-accent-color);
+            color: #000;
+        }
+
+        .small-btn {
+            padding: 0 6px;
+            height: 13px;
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        /* Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 2px;
+            background: transparent;
+            margin-top: 0;
+            flex-grow: 1;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 2px;
+            background: var(--panel-accent-color);
+            border-radius: 1px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #000;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 50%;
+            margin-top: -5px;
+            cursor: grab;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:active {
+            cursor: grabbing;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        /* Divisores y Selects */
+        hr {
+            border: none;
+            border-top: 0.4px solid var(--panel-accent-color);
+            width: 100%;
+            margin: 15px 0;
+        }
+
+        .subsection-divider {
+            margin-bottom: 25px;
+        }
+
+        .select-btn {
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 6px;
+            padding: 2px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--panel-accent-color);
+            cursor: pointer;
+            user-select: none;
+            font-size: 12px;
+            height: 24px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        .select-btn:hover {
+            background-color: var(--panel-accent-color);
+            color: #000;
+        }
+
+        select.select-btn {
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%2300ffff" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 5px center;
+            background-size: 12px;
+            padding-right: 20px;
+        }
+
+        select.select-btn option {
+            background-color: #000;
+            color: var(--panel-accent-color);
+        }
+
+        /* Tooltips y valores de Slider */
+        .custom-tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.9);
+            color: var(--panel-accent-color);
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            z-index: 1000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .speed-control-slider-container .min-value,
+        .speed-control-slider-container .max-value {
+            font-size: 10px;
+            color: var(--panel-accent-color);
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .slider-thumb-value {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.7);
+            color: var(--panel-accent-color);
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            pointer-events: none;
+            transform: translateX(-50%);
+            top: -19px;
+            display: none;
+            z-index: 5;
+        }
+
+        .multiplier-control-group {
+            width: 100%;
+            margin-top: 10px;
+            padding: 0 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Collapsible Section Logic */
+        .collapsible-section {
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 5px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            padding-top: 5px;
+            flex-shrink: 0;
+            position: relative;
+            height: 20px;
+        }
+
+        .arrow-icon {
+            width: 16px;
+            height: 16px;
+            fill: var(--panel-accent-color);
+            transition: transform 0.3s ease;
+        }
+
+        .section-title {
+            display: none;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .section-content {
+            flex-grow: 1;
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out, padding-top 0.4s ease-in-out;
+            opacity: 1;
+            padding-top: 10px;
+        }
+
+        #animation-section>.section-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .collapsible-section.collapsed .arrow-icon {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-section.collapsed .section-title {
+            display: inline;
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            white-space: nowrap;
+            font-weight: normal;
+        }
+
+        .collapsible-section.collapsed .section-content {
+            max-height: 0;
+            opacity: 0;
+            pointer-events: none;
+            padding-top: 0;
+        }
+
+        .collapsible-section.collapsed+hr {
+            margin: 5px 0;
+        }
+
+        /* Checkboxes */
+        .checkbox-title {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .checkbox-title input[type="checkbox"] {
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+            top: 1px;
+        }
+
+        .checkbox-title input[type="checkbox"]:checked {
+            background-color: var(--panel-accent-color);
+        }
+
+        .checkbox-title input[type="checkbox"]:checked::after {
+            content: '✔';
+            color: #000;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+        }
+
+        .curve-control {
+            gap: 3px;
+        }
+
+        .curve-control input {
+            width: 12px;
+            height: 12px;
+        }
+
+        .curve-control input:checked::after {
+            font-size: 8px;
+        }
+
+        /* Inputs de Ángulo y Color */
+        .angle-input-wrapper {
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 6px;
+            padding-left: 6px;
+        }
+
+        .angle-input-wrapper input {
+            border: none;
+            padding: 6px 0;
+            width: 35px;
+            text-align: right;
+        }
+
+        .degree-symbol {
+            font-size: 14px;
+            line-height: 1;
+            padding-right: 4px;
+        }
+
+        .color-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            width: 100%;
+        }
+
+        .color-preview {
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 4px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .color-sliders {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+        }
+
+        .speed-control-slider-container .min-value {
+            min-width: 10px;
+            text-align: right;
+        }
+
+        .twist-controls {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+        }
+
+        .direction-toggle-btn {
+            background: transparent;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 6px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .direction-toggle-btn:hover {
+            background-color: var(--panel-accent-color-translucent);
+        }
+
+        .direction-toggle-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: var(--panel-accent-color);
+        }
+
+        .auto-control-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: calc(100% - 21px);
+            box-sizing: border-box;
+            border: 1px solid var(--panel-accent-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            gap: 10px;
+            margin-left: 21px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <canvas id="sphere"></canvas>
+
+        <button id="open-panel-btn" data-tooltip="Open controls panel">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path
+                    d="M12 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z" />
+            </svg>
+        </button>
+
+        <div id="panel-wrapper" class="is-hidden">
+            <div id="panel">
+                <div class="collapsible-section">
+                    <div class="section-header">
+                        <svg class="arrow-icon" viewBox="0 0 24 24">
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                        </svg>
+                        <span class="section-title">Appearance</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="row">
+                            <div class="control-bordered-item">
+                                <span class="item-title"
+                                    data-tooltip="Adjust the size of individual dots">DotsSize</span>
+                                <div class="control">
+                                    <div class="control-row">
+                                        <input id="dotSize" type="text" value="0.5">
+                                        <div class="inc-decr-stack">
+                                            <button class="btn small-btn" id="dotSize-incr">+</button>
+                                            <button class="btn small-btn" id="dotSize-decr">-</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title" data-tooltip="Number of subdivisions (0-5)">Subdivisions</span>
+                                <div class="control">
+                                    <div class="control-row">
+                                        <input id="subdivisions" type="text" value="3">
+                                        <div class="inc-decr-stack">
+                                            <button class="btn small-btn" id="subdivisions-incr">+</button>
+                                            <button class="btn small-btn" id="subdivisions-decr">-</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title" data-tooltip="Total number of dots (read-only)">Ndots</span>
+                                <div class="control">
+                                    <div class="control-row">
+                                        <input id="nDots" type="text" value="0" readonly
+                                            style="background: rgba(0,255,255,0.1); width: 45px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <div class="control-bordered-item">
+                            <span class="item-title checkbox-title"
+                                data-tooltip="Toggle visibility of connecting lines">
+                                <input type="checkbox" id="showLines" checked>
+                                Show Lines
+                            </span>
+                            <div class="row2" style="margin-top: 10px;">
+                                <div class="control-bordered-item">
+                                    <span class="item-title" data-tooltip="Adjust line thickness">Width</span>
+                                    <div class="control">
+                                        <div class="control-row" style="justify-content: center;">
+                                            <input id="lineWidth" type="text" value="0.5">
+                                            <div class="inc-decr-stack">
+                                                <button class="btn small-btn" id="lineWidth-incr">+</button>
+                                                <button class="btn small-btn" id="lineWidth-decr">-</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="control-bordered-item">
+                                    <span class="item-title checkbox-title" data-tooltip="Toggle curved lines">
+                                        <input type="checkbox" id="curveLines">
+                                        Curve
+                                    </span>
+                                    <div class="speed-control-slider-container">
+                                        <input id="lineCurveIntensity" type="range" min="-100" max="100" value="0">
+                                        <div class="slider-thumb-value">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <hr class="subsection-divider">
+
+                        <div class="row2">
+                            <div class="control-bordered-item">
+                                <span class="item-title">Twist</span>
+                                <div class="twist-controls">
+                                    <label class="checkbox-title" data-tooltip="Enable/disable the twist effect">
+                                        <input type="checkbox" id="enableTwist">
+                                        On
+                                    </label>
+                                    <button id="twistDirBtn" class="direction-toggle-btn"
+                                        data-tooltip="Toggle twist direction"></button>
+                                </div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title" data-tooltip="Adjust twist intensity">Twist Power</span>
+                                <div class="speed-control-slider-container">
+                                    <input id="twistIntensity" type="range" min="0" max="200" value="50">
+                                    <div class="slider-thumb-value">50</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="subsection-divider">
+
+                        <div class="row2">
+                            <div class="control-bordered-item">
+                                <span class="item-title" data-tooltip="Color for the northern hemisphere">Color 1
+                                    (N)</span>
+                                <div class="color-container">
+                                    <div class="color-preview" id="color1-preview"
+                                        style="background-color: var(--panel-accent-color);"></div>
+                                    <input type="color" id="color1-picker" style="display: none;" value="#00ffff">
+                                    <div class="color-sliders">
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">R</span>
+                                            <input id="color1R" type="range" min="0" max="255" value="0" step="1">
+                                            <div class="slider-thumb-value">0</div>
+                                        </div>
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">G</span>
+                                            <input id="color1G" type="range" min="0" max="255" value="255" step="1">
+                                            <div class="slider-thumb-value">255</div>
+                                        </div>
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">B</span>
+                                            <input id="color1B" type="range" min="0" max="255" value="255" step="1">
+                                            <div class="slider-thumb-value">255</div>
+                                        </div>
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">A</span>
+                                            <input id="color1A" type="range" min="0" max="1" value="1" step="0.01">
+                                            <div class="slider-thumb-value">1</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title" data-tooltip="Color for the southern hemisphere">Color 2
+                                    (S)</span>
+                                <div class="color-container">
+                                    <div class="color-preview" id="color2-preview"
+                                        style="background-color: var(--panel-accent-color);"></div>
+                                    <input type="color" id="color2-picker" style="display: none;" value="#00ffff">
+                                    <div class="color-sliders">
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">R</span>
+                                            <input id="color2R" type="range" min="0" max="255" value="0" step="1">
+                                            <div class="slider-thumb-value">0</div>
+                                        </div>
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">G</span>
+                                            <input id="color2G" type="range" min="0" max="255" value="255" step="1">
+                                            <div class="slider-thumb-value">255</div>
+                                        </div>
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">B</span>
+                                            <input id="color2B" type="range" min="0" max="255" value="255" step="1">
+                                            <div class="slider-thumb-value">255</div>
+                                        </div>
+                                        <div class="speed-control-slider-container">
+                                            <span class="min-value">A</span>
+                                            <input id="color2A" type="range" min="0" max="1" value="1" step="0.01">
+                                            <div class="slider-thumb-value">1</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+
+                        <!-- NEW: Backgrounds Section (Nested) -->
+                        <div class="collapsible-section collapsed">
+                            <div class="section-header">
+                                <svg class="arrow-icon" viewBox="0 0 24 24">
+                                    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                                </svg>
+                                <span class="section-title">Backgrounds</span>
+                            </div>
+                            <div class="section-content">
+                                <div class="row2">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title">Body Background</span>
+                                        <div class="color-container" style="padding-top: 10px;">
+                                            <div class="color-preview" id="bgColor-preview"
+                                                style="background-color: rgb(0,0,0);"></div>
+                                            <input type="color" id="bgColor-picker" style="display: none;"
+                                                value="#000000">
+                                            <div class="color-sliders">
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">R</span>
+                                                    <input id="bgColorR" type="range" min="0" max="255" value="0"
+                                                        step="1">
+                                                    <div class="slider-thumb-value">0</div>
+                                                </div>
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">G</span>
+                                                    <input id="bgColorG" type="range" min="0" max="255" value="0"
+                                                        step="1">
+                                                    <div class="slider-thumb-value">0</div>
+                                                </div>
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">B</span>
+                                                    <input id="bgColorB" type="range" min="0" max="255" value="0"
+                                                        step="1">
+                                                    <div class="slider-thumb-value">0</div>
+                                                </div>
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">A</span>
+                                                    <input id="bgColorA" type="range" min="0" max="1" value="1"
+                                                        step="0.01">
+                                                    <div class="slider-thumb-value">1</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title checkbox-title"
+                                            data-tooltip="Enable/disable sphere background aura">
+                                            <input type="checkbox" id="sphereBgEnabled">
+                                            Sphere Aura
+                                        </span>
+                                        <div class="color-container" style="padding-top: 10px;">
+                                            <div class="color-preview" id="sphereBgColor-preview"
+                                                style="background-color: rgba(0,255,255,0.5);"></div>
+                                            <input type="color" id="sphereBgColor-picker" style="display: none;"
+                                                value="#00ffff">
+                                            <div class="color-sliders">
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">R</span>
+                                                    <input id="sphereBgColorR" type="range" min="0" max="255" value="0"
+                                                        step="1">
+                                                    <div class="slider-thumb-value">0</div>
+                                                </div>
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">G</span>
+                                                    <input id="sphereBgColorG" type="range" min="0" max="255"
+                                                        value="255" step="1">
+                                                    <div class="slider-thumb-value">255</div>
+                                                </div>
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">B</span>
+                                                    <input id="sphereBgColorB" type="range" min="0" max="255"
+                                                        value="255" step="1">
+                                                    <div class="slider-thumb-value">255</div>
+                                                </div>
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">A</span>
+                                                    <input id="sphereBgColorA" type="range" min="0" max="1" value="0.5"
+                                                        step="0.01">
+                                                    <div class="slider-thumb-value">0.5</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="control-bordered-item"
+                                            style="width: 100%; margin-top: 10px; padding-top: 15px;">
+                                            <span class="item-title"
+                                                data-tooltip="Spread of the central color in the gradient">Expansion</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="sphereBgSpread" type="range" min="0" max="100" value="10">
+                                                <div class="slider-thumb-value">10</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="collapsible-section collapsed">
+                    <div class="section-header">
+                        <svg class="arrow-icon" viewBox="0 0 24 24">
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                        </svg>
+                        <span class="section-title">Camera</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="row" style="grid-template-columns: 1fr 1fr auto; align-items: center;">
+                            <div class="control-bordered-item">
+                                <span class="item-title" data-tooltip="Control the zoom level of the sphere">Zoom</span>
+                                <div class="control">
+                                    <div class="speed-control-slider-container" id="zoomContainer">
+                                        <span class="min-value">1</span>
+                                        <input id="zoom" type="range" min="1" max="100" value="50">
+                                        <span class="max-value">100</span>
+                                        <div class="slider-thumb-value">50</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title"
+                                    data-tooltip="Adjust the overall size of the sphere on screen (%)">Size %</span>
+                                <div class="control">
+                                    <div class="speed-control-slider-container" id="sizeContainer">
+                                        <span class="min-value">10</span>
+                                        <input id="size" type="range" min="10" max="100" value="100">
+                                        <span class="max-value">100</span>
+                                        <div class="slider-thumb-value">100</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="checkbox-title" data-tooltip="Enable mouse drag and wheel zoom"
+                                style="font-size: 10px; padding-left: 5px;">
+                                <input type="checkbox" id="enableMouseDrag" checked>
+                                Mouse
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="collapsible-section collapsed">
+                    <div class="section-header">
+                        <svg class="arrow-icon" viewBox="0 0 24 24">
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                        </svg>
+                        <span class="section-title">Randomness</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="row">
+                            <div class="control-bordered-item">
+                                <span class="item-title"
+                                    data-tooltip="Randomness in the latitude (vertical position) of dots">Rndm
+                                    (θ)</span>
+                                <div class="control"><label for="latRandom"></label><input id="latRandom" type="range"
+                                        min="0" max="100" value="0"></div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title"
+                                    data-tooltip="Randomness in the longitude (horizontal position) of dots">Rndm
+                                    (φ)</span>
+                                <div class="control"><label for="lonRandom"></label><input id="lonRandom" type="range"
+                                        min="0" max="100" value="0"></div>
+                            </div>
+                            <div class="control-bordered-item">
+                                <span class="item-title"
+                                    data-tooltip="Randomness in the radius (distance from center) of dots">Rndm
+                                    (α)</span>
+                                <div class="control"><label for="radRandom"></label><input id="radRandom" type="range"
+                                        min="0" max="100" value="0"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div id="animation-section" class="collapsible-section collapsed">
+                    <div class="section-header">
+                        <svg class="arrow-icon" viewBox="0 0 24 24">
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                        </svg>
+                        <span class="section-title">Animation</span>
+                    </div>
+                    <div class="section-content">
+                        <div class="auto-control-wrapper">
+                            <span>Auto</span>
+                            <button id="auto-anim-toggle-btn" class="direction-toggle-btn"></button>
+                        </div>
+                        <div class="collapsible-section">
+                            <div class="section-header">
+                                <svg class="arrow-icon" viewBox="0 0 24 24">
+                                    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                                </svg>
+                                <span class="section-title">Rotation</span>
+                            </div>
+                            <div class="section-content">
+                                <div class="row3">
+                                    <div class="giro-container">
+                                        <div class="giro-item">
+                                            <span class="item-title"
+                                                data-tooltip="Rotation angle and speed for X-axis">Giro X</span>
+                                            <div class="control">
+                                                <select id="giroX" class="select-btn">
+                                                    <option value="0">NO</option>
+                                                    <option value="1" selected>→</option>
+                                                    <option value="-1">←</option>
+                                                </select>
+                                            </div>
+                                            <div class="angle-display-control">
+                                                <div class="angle-input-wrapper">
+                                                    <input id="giroXAngle" type="text" value="0.00">
+                                                    <span class="degree-symbol">°</span>
+                                                </div>
+                                            </div>
+                                            <div class="speed-control-wrapper">
+                                                <div class="speed-control-slider-container" id="giroXSpeedContainer">
+                                                    <span class="min-value">0</span>
+                                                    <input id="giroXSpeed" type="range" min="0" max="100" value="6">
+                                                    <span class="max-value">100</span>
+                                                    <div class="slider-thumb-value">6</div>
+                                                </div>
+                                            </div>
+                                            <div class="multiplier-control-group"
+                                                data-tooltip="Multiplies the speed for X-axis (1-100)">
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">1</span>
+                                                    <input id="giroXMultiplier" type="range" min="1" max="100" value="1"
+                                                        step="1">
+                                                    <span class="max-value">100</span>
+                                                    <div class="slider-thumb-value">1</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="giro-item">
+                                            <span class="item-title"
+                                                data-tooltip="Rotation angle and speed for Y-axis">Giro Y</span>
+                                            <div class="control">
+                                                <select id="giroY" class="select-btn">
+                                                    <option value="0">NO</option>
+                                                    <option value="1" selected>→</option>
+                                                    <option value="-1">←</option>
+                                                </select>
+                                            </div>
+                                            <div class="angle-display-control">
+                                                <div class="angle-input-wrapper">
+                                                    <input id="giroYAngle" type="text" value="0.00">
+                                                    <span class="degree-symbol">°</span>
+                                                </div>
+                                            </div>
+                                            <div class="speed-control-wrapper">
+                                                <div class="speed-control-slider-container" id="giroYSpeedContainer">
+                                                    <span class="min-value">0</span>
+                                                    <input id="giroYSpeed" type="range" min="0" max="100" value="8">
+                                                    <span class="max-value">100</span>
+                                                    <div class="slider-thumb-value">8</div>
+                                                </div>
+                                            </div>
+                                            <div class="multiplier-control-group"
+                                                data-tooltip="Multiplies the speed for Y-axis (1-100)">
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">1</span>
+                                                    <input id="giroYMultiplier" type="range" min="1" max="100" value="1"
+                                                        step="1">
+                                                    <span class="max-value">100</span>
+                                                    <div class="slider-thumb-value">1</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="giro-item">
+                                            <span class="item-title"
+                                                data-tooltip="Rotation angle and speed for Z-axis">Giro Z</span>
+                                            <div class="control">
+                                                <select id="giroZ" class="select-btn">
+                                                    <option value="0">NO</option>
+                                                    <option value="1">→</option>
+                                                    <option value="-1" selected>←</option>
+                                                </select>
+                                            </div>
+                                            <div class="angle-display-control">
+                                                <div class="angle-input-wrapper">
+                                                    <input id="giroZAngle" type="text" value="0.00">
+                                                    <span class="degree-symbol">°</span>
+                                                </div>
+                                            </div>
+                                            <div class="speed-control-wrapper">
+                                                <div class="speed-control-slider-container" id="giroZSpeedContainer">
+                                                    <span class="min-value">0</span>
+                                                    <input id="giroZSpeed" type="range" min="0" max="100" value="20">
+                                                    <span class="max-value">100</span>
+                                                    <div class="slider-thumb-value">20</div>
+                                                </div>
+                                            </div>
+                                            <div class="multiplier-control-group"
+                                                data-tooltip="Multiplies the speed for Z-axis (1-100)">
+                                                <div class="speed-control-slider-container">
+                                                    <span class="min-value">1</span>
+                                                    <input id="giroZMultiplier" type="range" min="1" max="100" value="1"
+                                                        step="1">
+                                                    <span class="max-value">100</span>
+                                                    <div class="slider-thumb-value">1</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="collapsible-section collapsed">
+                            <div class="section-header">
+                                <svg class="arrow-icon" viewBox="0 0 24 24">
+                                    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+                                </svg>
+                                <span class="section-title">Effects</span>
+                            </div>
+                            <div class="section-content">
+                                <div class="control-bordered-item">
+                                    <span class="item-title checkbox-title"
+                                        data-tooltip="Enable/Disable the pulse effect">
+                                        <input type="checkbox" id="enablePulse" checked>
+                                        Pulse
+                                    </span>
+                                    <div class="row2" style="margin-top: 10px;">
+                                        <div class="control-bordered-item">
+                                            <span class="item-title"
+                                                data-tooltip="Speed of the pulse animation">Speed</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="pulseSpeed" type="range" min="1" max="500" value="56">
+                                                <div class="slider-thumb-value">56</div>
+                                            </div>
+                                        </div>
+                                        <div class="control-bordered-item">
+                                            <span class="item-title"
+                                                data-tooltip="Amplitude of the size change">Radius</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="pulseRadius" type="range" min="0" max="100" step="1"
+                                                    value="27">
+                                                <div class="slider-thumb-value">27</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top: 10px; width: 100%;">
+                                        <select id="pulseType" class="select-btn"
+                                            data-tooltip="Select the type of pulse animation" style="width: 100%;">
+                                            <option value="bounce">Bounce</option>
+                                            <option value="rebound">Rebound</option>
+                                            <option value="heartbeat">Heartbeat</option>
+                                            <option value="breathe">Breathe</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <!-- MODIFIED MORPH SECTION -->
+                                <div class="control-bordered-item" style="margin-top: 10px;">
+                                    <span class="item-title checkbox-title">
+                                        <input type="checkbox" id="morphicEffects">
+                                        Morph (Waves)
+                                    </span>
+                                    <div class="row2" style="margin-top: 10px; align-items: center;">
+                                        <div class="control-bordered-item">
+                                            <span class="item-title" data-tooltip="Number of wave emitters">Nº
+                                                Waves</span>
+                                            <div class="control">
+                                                <div class="control-row">
+                                                    <input id="waveCount" type="text" value="5">
+                                                    <div class="inc-decr-stack">
+                                                        <button class="btn small-btn" id="waveCount-incr">+</button>
+                                                        <button class="btn small-btn" id="waveCount-decr">-</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="control-bordered-item">
+                                            <span class="item-title"
+                                                data-tooltip="Overall wave intensity">Intensity</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="waveIntensity" type="range" min="0" max="100" value="50">
+                                                <div class="slider-thumb-value">50</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row3" style="margin-top: 10px;">
+                                        <div class="control-bordered-item">
+                                            <span class="item-title"
+                                                data-tooltip="Global wave speed multiplier">Speed</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="waveSpeed" type="range" min="0" max="100" value="50">
+                                                <div class="slider-thumb-value">50</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row2" style="margin-top: 10px;">
+                                        <div class="control-bordered-item">
+                                            <span class="item-title"
+                                                data-tooltip="Global wave amplitude multiplier">Amplitude</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="waveAmplitude" type="range" min="0" max="100" value="50">
+                                                <div class="slider-thumb-value">50</div>
+                                            </div>
+                                        </div>
+                                        <div class="control-bordered-item">
+                                            <span class="item-title"
+                                                data-tooltip="Wave frequency (tightness)">Frequency</span>
+                                            <div class="speed-control-slider-container">
+                                                <input id="waveFrequency" type="range" min="1" max="50" value="10">
+                                                <div class="slider-thumb-value">10</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button id="close-panel-btn" data-tooltip="Close controls panel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z" />
+                </svg>
+            </button>
+            <div id="panel-resize-handle" data-tooltip="Drag to resize panel"></div>
+        </div>
+    </div>
+    <script>
+        // DEVELOPMENT MODE FLAG
+        const dev_mode = true;
+
+        // Get canvas and its 2D context
+        const canvas = document.getElementById('sphere'),
+            ctx = canvas.getContext('2d');
+
+        // Variables for width, height, and sphere radius
+        let w, h, R;
+        let animationFrameId = null;
+
+        // Configurable sphere parameters (for animation loop)
+        const params = {
+            zoom: 48,
+            dotSize: 0.5,
+            subdivisions: 3,
+            size: 100,
+            rotX: 1, rotY: 1, rotZ: -1,
+            speedX: 16, speedY: 48, speedZ: 20,
+            speedMultiplierX: 1, speedMultiplierY: 1, speedMultiplierZ: 1,
+            latRandom: 0, lonRandom: 0, radRandom: 0,
+            showLines: true,
+            lineWidth: 0.5,
+            curveLines: false,
+            lineCurveIntensity: 0,
+            enableTwist: false,
+            twistIntensity: 50,
+            twistDir: 1,
+            enableMouseDrag: true,
+            enablePulse: true,
+            pulseSpeed: 150,
+            pulseRadius: 4,
+            pulseType: 'bounce',
+            morphicEffects: false,
+            waveIntensity: 50,
+            waveCount: 5,
+            waveSpeed: 50,
+            waveAmplitude: 50,
+            waveFrequency: 10,
+            isAnimationPaused: false,
+            color1: { r: 0, g: 213, b: 255, a: 1 },
+            color2: { r: 0, g: 213, b: 255, a: 1 },
+        };
+
+        // NEW: Parameters for styles that don't need per-frame updates
+        const styleParams = {
+            bgColor: { r: 0, g: 0, b: 0, a: 0 },
+            sphereBgEnabled: false,
+            sphereBgColor: { r: 0, g: 255, b: 255, a: 0.5 },
+            sphereBgSpread: 10, // Percentage
+        };
+
+        // Arrays for sphere data
+        let basePts = [],
+            icoFaces = [],
+            randR = [],
+            waveEffects = [];
+
+        // Current rotation angles in radians
+        let angleX = 0, angleY = 0, angleZ = 0;
+        let pulsePhase = 0;
+
+        // --- Element References ---
+        const giroXAngleInput = document.getElementById('giroXAngle');
+        const giroYAngleInput = document.getElementById('giroYAngle');
+        const giroZAngleInput = document.getElementById('giroZAngle');
+        const giroXSpeedInput = document.getElementById('giroXSpeed');
+        const giroYSpeedInput = document.getElementById('giroYSpeed');
+        const giroZSpeedInput = document.getElementById('giroZSpeed');
+        const giroXMultiplierInput = document.getElementById('giroXMultiplier');
+        const giroYMultiplierInput = document.getElementById('giroYMultiplier');
+        const giroZMultiplierInput = document.getElementById('giroZMultiplier');
+        const zoomInput = document.getElementById('zoom');
+        const sizeInput = document.getElementById('size');
+        const enableMouseDragInput = document.getElementById('enableMouseDrag');
+        const enablePulseInput = document.getElementById('enablePulse');
+        const pulseSpeedInput = document.getElementById('pulseSpeed');
+        const pulseRadiusInput = document.getElementById('pulseRadius');
+        const pulseTypeInput = document.getElementById('pulseType');
+        const autoAnimToggleBtn = document.getElementById('auto-anim-toggle-btn');
+        const color1RInput = document.getElementById('color1R');
+        const color1GInput = document.getElementById('color1G');
+        const color1BInput = document.getElementById('color1B');
+        const color1AInput = document.getElementById('color1A');
+        const color2RInput = document.getElementById('color2R');
+        const color2GInput = document.getElementById('color2G');
+        const color2BInput = document.getElementById('color2B');
+        const color2AInput = document.getElementById('color2A');
+        const color1Preview = document.getElementById('color1-preview');
+        const color2Preview = document.getElementById('color2-preview');
+        const color1Picker = document.getElementById('color1-picker');
+        const color2Picker = document.getElementById('color2-picker');
+        const nDotsInput = document.getElementById('nDots');
+        const subdivisionsInput = document.getElementById('subdivisions');
+        const showLinesInput = document.getElementById('showLines');
+        const lineWidthInput = document.getElementById('lineWidth');
+        const curveLinesInput = document.getElementById('curveLines');
+        const lineCurveIntensityInput = document.getElementById('lineCurveIntensity');
+        const enableTwistInput = document.getElementById('enableTwist');
+        const twistIntensityInput = document.getElementById('twistIntensity');
+        const twistDirBtn = document.getElementById('twistDirBtn');
+        const morphicEffectsInput = document.getElementById('morphicEffects');
+        const waveIntensityInput = document.getElementById('waveIntensity');
+        const waveCountInput = document.getElementById('waveCount');
+        const waveSpeedInput = document.getElementById('waveSpeed');
+        const waveAmplitudeInput = document.getElementById('waveAmplitude');
+        const waveFrequencyInput = document.getElementById('waveFrequency');
+
+        // NEW: Background control references
+        const bgColorRInput = document.getElementById('bgColorR');
+        const bgColorGInput = document.getElementById('bgColorG');
+        const bgColorBInput = document.getElementById('bgColorB');
+        const bgColorAInput = document.getElementById('bgColorA');
+        const bgColorPreview = document.getElementById('bgColor-preview');
+        const bgColorPicker = document.getElementById('bgColor-picker');
+        const sphereBgEnabledInput = document.getElementById('sphereBgEnabled');
+        const sphereBgColorRInput = document.getElementById('sphereBgColorR');
+        const sphereBgColorGInput = document.getElementById('sphereBgColorG');
+        const sphereBgColorBInput = document.getElementById('sphereBgColorB');
+        const sphereBgColorAInput = document.getElementById('sphereBgColorA');
+        const sphereBgColorPreview = document.getElementById('sphereBgColor-preview');
+        const sphereBgColorPicker = document.getElementById('sphereBgColor-picker');
+        const sphereBgSpreadInput = document.getElementById('sphereBgSpread');
+
+
+        let actualMinThetaG, actualMaxThetaG, actualThetaRange;
+
+        function toDegrees(radians) { return radians * (180 / Math.PI); }
+        function toRadians(degrees) { return degrees * (Math.PI / 180); }
+        function normalizeAngle(angle) { return angle % (2 * Math.PI); }
+
+        // --- MORPHIC & ICOSPHERE LOGIC ---
+        function initWaveEffects() {
+            waveEffects = [];
+            for (let i = 0; i < params.waveCount; i++) {
+                waveEffects.push({
+                    x: Math.random() * 2 - 1,
+                    y: Math.random() * 2 - 1,
+                    z: Math.random() * 2 - 1,
+                    phase: Math.random() * Math.PI * 2,
+                    speed: 0.02 + Math.random() * 0.03,
+                    amplitude: 0.1 + Math.random() * 0.2
+                });
+            }
+        }
+
+        function cartesianToSpherical(x, y, z) {
+            return { theta: Math.asin(z), phi: Math.atan2(y, x) };
+        }
+
+        function getMidpoint(v1, v2) {
+            const mid = [(v1[0] + v2[0]) / 2, (v1[1] + v2[1]) / 2, (v1[2] + v2[2]) / 2];
+            const length = Math.sqrt(mid[0] ** 2 + mid[1] ** 2 + mid[2] ** 2);
+            return [mid[0] / length, mid[1] / length, mid[2] / length];
+        }
+
+        function generateIcosphere(subdivisions) {
+            const phi = (1 + Math.sqrt(5)) / 2;
+            const norm = Math.sqrt(1 + phi ** 2);
+            let vertices = [
+                [-1 / norm, phi / norm, 0], [1 / norm, phi / norm, 0], [-1 / norm, -phi / norm, 0], [1 / norm, -phi / norm, 0],
+                [0, -1 / norm, phi / norm], [0, 1 / norm, phi / norm], [0, -1 / norm, -phi / norm], [0, 1 / norm, -phi / norm],
+                [phi / norm, 0, -1 / norm], [phi / norm, 0, 1 / norm], [-phi / norm, 0, -1 / norm], [-phi / norm, 0, 1 / norm]
+            ];
+            let faces = [
+                [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2],
+                [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5],
+                [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+            ];
+
+            for (let i = 0; i < subdivisions; i++) {
+                const newFaces = [];
+                const midpointCache = new Map();
+                const getOrCreateMidpoint = (i1, i2) => {
+                    const key = i1 < i2 ? `${i1},${i2}` : `${i2},${i1}`;
+                    if (midpointCache.has(key)) return midpointCache.get(key);
+                    const midpoint = getMidpoint(vertices[i1], vertices[i2]);
+                    const index = vertices.length;
+                    vertices.push(midpoint);
+                    midpointCache.set(key, index);
+                    return index;
+                };
+                for (const face of faces) {
+                    const [v1, v2, v3] = face;
+                    const a = getOrCreateMidpoint(v1, v2);
+                    const b = getOrCreateMidpoint(v2, v3);
+                    const c = getOrCreateMidpoint(v3, v1);
+                    newFaces.push([v1, a, c], [v2, b, a], [v3, c, b], [a, b, c]);
+                }
+                faces = newFaces;
+            }
+            return { vertices, faces };
+        }
+
+        function initBasePts() {
+            basePts = [];
+            randR = [];
+            const icosphere = generateIcosphere(params.subdivisions);
+            icoFaces = icosphere.faces;
+
+            let tempMinTheta = Infinity, tempMaxTheta = -Infinity;
+            icosphere.vertices.forEach(v => {
+                const spherical = cartesianToSpherical(v[0], v[1], v[2]);
+                if (spherical.theta < tempMinTheta) tempMinTheta = spherical.theta;
+                if (spherical.theta > tempMaxTheta) tempMaxTheta = spherical.theta;
+                basePts.push({
+                    thetaG: spherical.theta, phiG: spherical.phi,
+                    thetaR: Math.acos(2 * Math.random() - 1) - Math.PI / 2,
+                    phiR: 2 * Math.PI * Math.random()
+                });
+                randR.push(Math.random());
+            });
+
+            actualMinThetaG = tempMinTheta;
+            actualMaxThetaG = tempMaxTheta;
+            actualThetaRange = actualMaxThetaG - actualMinThetaG;
+
+            if (params.enableTwist) {
+                applyTwist(basePts, params.twistIntensity, params.twistDir);
+            }
+            initWaveEffects();
+            nDotsInput.value = basePts.length;
+        }
+
+        function applyTwist(pts, intensity, direction) {
+            const maxTwistAngle = (intensity / 100) * (2 * Math.PI);
+
+            pts.forEach(p => {
+                const normalizedLatitude = p.thetaG / (Math.PI / 2);
+                const twistAngle = normalizedLatitude * maxTwistAngle * direction;
+                p.phiG += twistAngle;
+            });
+        }
+
+        function resize() {
+            w = window.innerWidth;
+            h = window.innerHeight;
+            canvas.width = w;
+            canvas.height = h;
+        }
+        window.addEventListener('resize', resize);
+
+        // --- Control Setup ---
+        zoomInput.addEventListener('input', e => params.zoom = +e.target.value);
+        const dotSizeInput = document.getElementById('dotSize');
+        document.getElementById('dotSize-incr').addEventListener('click', () => {
+            params.dotSize = parseFloat((params.dotSize + 0.1).toFixed(2));
+            dotSizeInput.value = params.dotSize.toFixed(1);
+        });
+        document.getElementById('dotSize-decr').addEventListener('click', () => {
+            params.dotSize = parseFloat(Math.max(0.0, params.dotSize - 0.1).toFixed(2));
+            dotSizeInput.value = params.dotSize.toFixed(1);
+        });
+        dotSizeInput.addEventListener('input', e => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val)) params.dotSize = Math.max(0.0, val);
+        });
+        dotSizeInput.addEventListener('blur', e => e.target.value = params.dotSize.toFixed(1));
+        document.getElementById('subdivisions-incr').addEventListener('click', () => {
+            params.subdivisions = Math.min(5, params.subdivisions + 1);
+            subdivisionsInput.value = params.subdivisions;
+            initBasePts();
+        });
+        document.getElementById('subdivisions-decr').addEventListener('click', () => {
+            params.subdivisions = Math.max(0, params.subdivisions - 1);
+            subdivisionsInput.value = params.subdivisions;
+            initBasePts();
+        });
+        subdivisionsInput.addEventListener('input', e => {
+            params.subdivisions = Math.max(0, Math.min(5, +e.target.value));
+            initBasePts();
+        });
+        sizeInput.addEventListener('input', e => params.size = +e.target.value);
+        document.getElementById('giroX').addEventListener('change', e => params.rotX = +e.target.value);
+        document.getElementById('giroY').addEventListener('change', e => params.rotY = +e.target.value);
+        document.getElementById('giroZ').addEventListener('change', e => params.rotZ = +e.target.value);
+        [giroXAngleInput, giroYAngleInput, giroZAngleInput].forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val)) {
+                    if (index === 0) angleX = toRadians(val);
+                    if (index === 1) angleY = toRadians(val);
+                    if (index === 2) angleZ = toRadians(val);
+                }
+            });
+            input.addEventListener('blur', (e) => {
+                let angleRef = (index === 0) ? angleX : (index === 1) ? angleY : angleZ;
+                e.target.value = toDegrees(normalizeAngle(angleRef)).toFixed(2);
+            });
+        });
+        giroXSpeedInput.addEventListener('input', e => params.speedX = +e.target.value);
+        giroYSpeedInput.addEventListener('input', e => params.speedY = +e.target.value);
+        giroZSpeedInput.addEventListener('input', e => params.speedZ = +e.target.value);
+        giroXMultiplierInput.addEventListener('input', e => params.speedMultiplierX = +e.target.value);
+        giroYMultiplierInput.addEventListener('input', e => params.speedMultiplierY = +e.target.value);
+        giroZMultiplierInput.addEventListener('input', e => params.speedMultiplierZ = +e.target.value);
+        showLinesInput.addEventListener('change', e => params.showLines = e.target.checked);
+        curveLinesInput.addEventListener('change', e => params.curveLines = e.target.checked);
+        lineCurveIntensityInput.addEventListener('input', e => params.lineCurveIntensity = +e.target.value);
+        document.getElementById('lineWidth-incr').addEventListener('click', () => {
+            params.lineWidth = parseFloat((params.lineWidth + 0.1).toFixed(2));
+            lineWidthInput.value = params.lineWidth.toFixed(1);
+        });
+        document.getElementById('lineWidth-decr').addEventListener('click', () => {
+            params.lineWidth = parseFloat(Math.max(0.1, params.lineWidth - 0.1).toFixed(2));
+            lineWidthInput.value = params.lineWidth.toFixed(1);
+        });
+        lineWidthInput.addEventListener('input', e => {
+            const val = parseFloat(e.target.value);
+            if (!isNaN(val)) params.lineWidth = Math.max(0.1, val);
+        });
+        enableTwistInput.addEventListener('change', e => {
+            params.enableTwist = e.target.checked;
+            initBasePts();
+        });
+        twistIntensityInput.addEventListener('input', e => {
+            params.twistIntensity = +e.target.value;
+            initBasePts();
+        });
+        twistDirBtn.addEventListener('click', () => {
+            params.twistDir *= -1;
+            updateTwistDirectionUI();
+            initBasePts();
+        });
+        autoAnimToggleBtn.addEventListener('click', () => {
+            params.isAnimationPaused = !params.isAnimationPaused;
+            updatePlayPauseUI();
+        });
+        enablePulseInput.addEventListener('change', e => params.enablePulse = e.target.checked);
+        pulseSpeedInput.addEventListener('input', e => params.pulseSpeed = +e.target.value);
+        pulseRadiusInput.addEventListener('input', e => params.pulseRadius = +e.target.value);
+        pulseTypeInput.addEventListener('change', e => params.pulseType = e.target.value);
+        morphicEffectsInput.addEventListener('change', e => params.morphicEffects = e.target.checked);
+        waveIntensityInput.addEventListener('input', e => params.waveIntensity = +e.target.value);
+        waveSpeedInput.addEventListener('input', e => params.waveSpeed = +e.target.value);
+        waveAmplitudeInput.addEventListener('input', e => params.waveAmplitude = +e.target.value);
+        waveFrequencyInput.addEventListener('input', e => params.waveFrequency = +e.target.value);
+        document.getElementById('waveCount-incr').addEventListener('click', () => {
+            params.waveCount = Math.min(20, params.waveCount + 1);
+            waveCountInput.value = params.waveCount;
+            initWaveEffects();
+        });
+        document.getElementById('waveCount-decr').addEventListener('click', () => {
+            params.waveCount = Math.max(1, params.waveCount - 1);
+            waveCountInput.value = params.waveCount;
+            initWaveEffects();
+        });
+        waveCountInput.addEventListener('input', e => {
+            params.waveCount = Math.max(1, Math.min(20, +e.target.value));
+            initWaveEffects();
+        });
+
+        color1RInput.addEventListener('input', e => { params.color1.r = +e.target.value; updateColorPreview(1); });
+        color1GInput.addEventListener('input', e => { params.color1.g = +e.target.value; updateColorPreview(1); });
+        color1BInput.addEventListener('input', e => { params.color1.b = +e.target.value; updateColorPreview(1); });
+        color1AInput.addEventListener('input', e => { params.color1.a = +e.target.value; updateColorPreview(1); });
+        color2RInput.addEventListener('input', e => { params.color2.r = +e.target.value; updateColorPreview(2); });
+        color2GInput.addEventListener('input', e => { params.color2.g = +e.target.value; updateColorPreview(2); });
+        color2BInput.addEventListener('input', e => { params.color2.b = +e.target.value; updateColorPreview(2); });
+        color2AInput.addEventListener('input', e => { params.color2.a = +e.target.value; updateColorPreview(2); });
+
+       
+
+
+        // NEW: Background control listeners
+        bgColorRInput.addEventListener('input', e => { styleParams.bgColor.r = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        bgColorGInput.addEventListener('input', e => { styleParams.bgColor.g = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        bgColorBInput.addEventListener('input', e => { styleParams.bgColor.b = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        bgColorAInput.addEventListener('input', e => { styleParams.bgColor.a = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        sphereBgEnabledInput.addEventListener('change', e => styleParams.sphereBgEnabled = e.target.checked);
+        sphereBgColorRInput.addEventListener('input', e => { styleParams.sphereBgColor.r = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        sphereBgColorGInput.addEventListener('input', e => { styleParams.sphereBgColor.g = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        sphereBgColorBInput.addEventListener('input', e => { styleParams.sphereBgColor.b = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        sphereBgColorAInput.addEventListener('input', e => { styleParams.sphereBgColor.a = +e.target.value; applyStyleParams(); updateThumbValue(e.target); });
+        sphereBgSpreadInput.addEventListener('input', e => { styleParams.sphereBgSpread = +e.target.value; updateThumbValue(e.target); });
+
+
+        // --- UI & Interaction Functions ---
+        function updateThumbValue(sliderInput) {
+            const container = sliderInput.closest('.speed-control-slider-container');
+            if (!container) return;
+            const thumbValueElement = container.querySelector('.slider-thumb-value');
+            if (!thumbValueElement) return;
+            const value = parseFloat(sliderInput.value).toFixed(sliderInput.step && parseFloat(sliderInput.step) < 1 ? 2 : 0);
+            const min = parseFloat(sliderInput.min);
+            const max = parseFloat(sliderInput.max);
+            const percentage = (value - min) / (max - min);
+            const sliderRect = sliderInput.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const thumbWidth = 12;
+            const thumbPositionOnTrack = percentage * (sliderRect.width - thumbWidth) + thumbWidth / 2;
+            const relativeLeft = (sliderRect.left - containerRect.left) + thumbPositionOnTrack;
+            thumbValueElement.textContent = value;
+            thumbValueElement.style.left = `${relativeLeft}px`;
+        }
+        function showThumbValue(sliderInput) {
+            const container = sliderInput.closest('.speed-control-slider-container');
+            if (container) {
+                const thumbValueElement = container.querySelector('.slider-thumb-value');
+                if (thumbValueElement) {
+                    updateThumbValue(sliderInput);
+                    thumbValueElement.style.display = 'block';
+                }
+            }
+        }
+        function hideThumbValue(sliderInput) {
+            const container = sliderInput.closest('.speed-control-slider-container');
+            if (container) {
+                const thumbValueElement = container.querySelector('.slider-thumb-value');
+                if (thumbValueElement) thumbValueElement.style.display = 'none';
+            }
+        }
+        document.querySelectorAll('input[type=range]').forEach(slider => {
+            const container = slider.closest('.speed-control-slider-container');
+            if (container) {
+                slider.addEventListener('mousedown', () => showThumbValue(slider));
+                slider.addEventListener('input', () => {
+                    const thumbValue = container.querySelector('.slider-thumb-value');
+                    if (thumbValue && thumbValue.style.display === 'block') updateThumbValue(slider);
+                });
+                slider.addEventListener('mouseup', () => hideThumbValue(slider));
+                slider.addEventListener('mouseleave', () => hideThumbValue(slider));
+            }
+        });
+
+        document.getElementById('latRandom').addEventListener('input', e => params.latRandom = +e.target.value);
+        document.getElementById('lonRandom').addEventListener('input', e => params.lonRandom = +e.target.value);
+        document.getElementById('radRandom').addEventListener('input', e => params.radRandom = +e.target.value);
+      
+        document.querySelectorAll('.section-header').forEach(header => {
+            header.addEventListener('click', () => header.parentElement.classList.toggle('collapsed'));
+        });
+        const panelWrapper = document.getElementById('panel-wrapper');
+        const openBtn = document.getElementById('open-panel-btn');
+        const closeBtn = document.getElementById('close-panel-btn');
+        closeBtn.addEventListener('click', () => {
+            panelWrapper.classList.add('is-hidden');
+            if (dev_mode) {
+                openBtn.classList.add('is-visible');
+            }
+        });
+        openBtn.addEventListener('click', () => {
+            panelWrapper.classList.remove('is-hidden');
+            openBtn.classList.remove('is-visible');
+        });
+        let lastFrameTime = performance.now();
+        let isDragging = false;
+        let lastMouseX, lastMouseY;
+        let autoRotationState = {};
+        function isMouseOverSphere(e) {
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const screenRadius = R * (params.zoom / 50);
+            return Math.hypot(e.clientX - centerX, e.clientY - centerY) <= screenRadius;
+        }
+        enableMouseDragInput.addEventListener('change', e => {
+            params.enableMouseDrag = e.target.checked;
+            canvas.style.cursor = params.enableMouseDrag ? 'grab' : 'default';
+        });
+        canvas.addEventListener('mousedown', e => {
+            if (!params.enableMouseDrag || !isMouseOverSphere(e)) return;
+            isDragging = true;
+            canvas.style.cursor = 'grabbing';
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            autoRotationState = { rotX: params.rotX, rotY: params.rotY, rotZ: params.rotZ };
+            params.rotX = 0; params.rotY = 0; params.rotZ = 0;
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (params.enableMouseDrag) canvas.style.cursor = isMouseOverSphere(e) ? 'grab' : 'default';
+            Object.assign(params, autoRotationState);
+        });
+        window.addEventListener('mousemove', e => {
+            if (isDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                angleY += deltaX * 0.005;
+                angleX += deltaY * 0.005;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            } else if (params.enableMouseDrag) {
+                canvas.style.cursor = isMouseOverSphere(e) ? 'grab' : 'default';
+            }
+        });
+        canvas.addEventListener('wheel', e => {
+            if (!params.enableMouseDrag) return;
+            e.preventDefault();
+            params.zoom = Math.max(1, Math.min(100, params.zoom - (e.deltaY > 0 ? 1 : -1)));
+            zoomInput.value = params.zoom;
+            updateThumbValue(zoomInput);
+        });
+
+        // --- Drawing & Color Functions ---
+        function lerpColor(c1, c2, f) {
+            return `rgba(${Math.round(c1.r + (c2.r - c1.r) * f)}, ${Math.round(c1.g + (c2.g - c1.g) * f)}, ${Math.round(c1.b + (c2.b - c1.b) * f)}, ${parseFloat((c1.a + (c2.a - c1.a) * f).toFixed(2))})`;
+        }
+        function updateColorPreview(num) {
+            let color, preview;
+            if (num === 1) { [color, preview] = [params.color1, color1Preview]; }
+            else if (num === 2) { [color, preview] = [params.color2, color2Preview]; }
+            else if (num === 'bg') { [color, preview] = [styleParams.bgColor, bgColorPreview]; }
+            else if (num === 'sphereBg') { [color, preview] = [styleParams.sphereBgColor, sphereBgColorPreview]; }
+            preview.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
+        }
+        function hexToRgba(hex, alpha = 1) {
+            let r = parseInt(hex.substring(1, 3), 16);
+            let g = parseInt(hex.substring(3, 5), 16);
+            let b = parseInt(hex.substring(5, 7), 16);
+            return { r, g, b, a: alpha };
+        }
+        function updateRgbaSliders(type, color) {
+            let rIn, gIn, bIn, aIn;
+            if (type === 1) { [rIn, gIn, bIn, aIn] = [color1RInput, color1GInput, color1BInput, color1AInput]; }
+            else if (type === 2) { [rIn, gIn, bIn, aIn] = [color2RInput, color2GInput, color2BInput, color2AInput]; }
+            else if (type === 'bg') { [rIn, gIn, bIn, aIn] = [bgColorRInput, bgColorGInput, bgColorBInput, bgColorAInput]; }
+            else if (type === 'sphereBg') { [rIn, gIn, bIn, aIn] = [sphereBgColorRInput, sphereBgColorGInput, sphereBgColorBInput, sphereBgColorAInput]; }
+            rIn.value = color.r; gIn.value = color.g; bIn.value = color.b; aIn.value = color.a;
+            [rIn, gIn, bIn, aIn].forEach(updateThumbValue);
+        }
+        function perlin1d(x) {
+            const p = [151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9, 129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157, 184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180];
+            const perm = new Array(512);
+            for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+            function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+            function lerp(a, b, t) { return a + t * (b - a); }
+            function grad(h, x) { return ((h & 1) === 0 ? x : -x); }
+            const xi = Math.floor(x) & 255;
+            const xf = x - Math.floor(x);
+            const u = fade(xf);
+            return lerp(grad(perm[xi], xf), grad(perm[xi + 1], xf - 1), u);
+        }
+
+        // NEW: Apply non-animated styles
+        function applyStyleParams() {
+            const { r, g, b, a } = styleParams.bgColor;
+            document.body.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+            updateColorPreview('bg');
+            updateColorPreview('sphereBg');
+        }
+
+        function draw(now) {
+            const deltaTime = now - lastFrameTime;
+            if (!params.isAnimationPaused) {
+                lastFrameTime = now;
+                if (params.enablePulse) {
+                    pulsePhase += (deltaTime * 0.001) * (params.pulseSpeed / 50.0);
+                }
+                if (params.morphicEffects) {
+                    waveEffects.forEach(wave => wave.phase += wave.speed * deltaTime * 0.1 * (params.waveSpeed / 50));
+                }
+
+                if (!isDragging) {
+                    const speedX = params.rotX * (params.speedX / 100) * 0.005 * params.speedMultiplierX;
+                    const speedY = params.rotY * (params.speedY / 100) * 0.005 * params.speedMultiplierY;
+                    const speedZ = params.rotZ * (params.speedZ / 100) * 0.005 * params.speedMultiplierZ;
+                    angleX = normalizeAngle(angleX + speedX * deltaTime * 0.1);
+                    angleY = normalizeAngle(angleY + speedY * deltaTime * 0.1);
+                    angleZ = normalizeAngle(angleZ + speedZ * deltaTime * 0.1);
+                }
+            }
+
+            const maxRadius = (Math.min(w, h) / 2) - 5;
+            let baseRadius = maxRadius * (params.size / 100);
+
+            if (params.enablePulse) {
+                let pulseOffset = 0;
+                switch (params.pulseType) {
+                    case 'bounce': pulseOffset = baseRadius * (params.pulseRadius / 100) * Math.sin(pulsePhase); break;
+                    case 'rebound': pulseOffset = baseRadius * (params.pulseRadius / 100) * Math.abs(Math.sin(pulsePhase)); break;
+                    case 'heartbeat':
+                        const t = pulsePhase % 2.5;
+                        let p = (t < 0.25 ? Math.sin(t * (Math.PI / 0.25)) : (t >= 0.35 && t < 0.55 ? 0.6 * Math.sin((t - 0.35) * (Math.PI / 0.20)) : 0));
+                        pulseOffset = baseRadius * (params.pulseRadius / 100) * p;
+                        break;
+                    case 'breathe':
+                        const nT = pulsePhase * 0.25 + 100;
+                        pulseOffset = baseRadius * (params.pulseRadius / 100) * Math.sin(pulsePhase * (0.7 + 0.3 * perlin1d(nT + 100)) + perlin1d(nT) * 2) * (0.7 + 0.3 * perlin1d(nT + 50)) * perlin1d(nT);
+                        break;
+                }
+                R = baseRadius + pulseOffset;
+            } else {
+                R = baseRadius;
+            }
+
+            if (document.activeElement !== giroXAngleInput) giroXAngleInput.value = toDegrees(angleX).toFixed(2);
+            if (document.activeElement !== giroYAngleInput) giroYAngleInput.value = toDegrees(angleY).toFixed(2);
+            if (document.activeElement !== giroZAngleInput) giroZAngleInput.value = toDegrees(angleZ).toFixed(2);
+
+            ctx.clearRect(0, 0, w, h);
+            const centerX = w / 2, centerY = h / 2;
+
+            // NEW: Draw sphere aura if enabled
+            if (styleParams.sphereBgEnabled) {
+                const { r, g, b, a } = styleParams.sphereBgColor;
+                const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, R * (params.zoom / 50));
+                const spread = Math.min(1, styleParams.sphereBgSpread / 100);
+                gradient.addColorStop(0, `rgba(${r},${g},${b},${a})`);
+                gradient.addColorStop(spread, `rgba(${r},${g},${b},${a})`);
+                gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, w, h);
+            }
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.scale(params.zoom / 50, params.zoom / 50);
+            ctx.translate(-centerX, -centerY);
+
+            const transformedPts = [];
+            basePts.forEach((p, i) => {
+                const theta = p.thetaG * (1 - params.latRandom / 100) + p.thetaR * (params.latRandom / 100);
+                const phi = p.phiG * (1 - params.lonRandom / 100) + p.phiR * (params.lonRandom / 100);
+                let x = Math.cos(theta) * Math.cos(phi);
+                let y = Math.cos(theta) * Math.sin(phi);
+                let z = Math.sin(theta);
+
+                if (params.morphicEffects) {
+                    let waveDisplacement = 0;
+                    waveEffects.forEach(wave => {
+                        const dist = Math.sqrt((x - wave.x) ** 2 + (y - wave.y) ** 2 + (z - wave.z) ** 2);
+                        waveDisplacement += Math.sin(wave.phase - dist * params.waveFrequency) * (wave.amplitude * (params.waveAmplitude / 50)) * (params.waveIntensity / 100);
+                    });
+                    const factor = 1 + waveDisplacement;
+                    x *= factor; y *= factor; z *= factor;
+                }
+
+                const randomRadiusFactor = 1 - (params.radRandom / 100) * randR[i];
+                x *= randomRadiusFactor; y *= randomRadiusFactor; z *= randomRadiusFactor;
+
+                let cosZ = Math.cos(angleZ), sinZ = Math.sin(angleZ);
+                [x, y] = [x * cosZ - y * sinZ, x * sinZ + y * cosZ];
+                let cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+                [x, z] = [x * cosY + z * sinY, -x * sinY + z * cosY];
+                let cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+                [y, z] = [y * sinX + z * cosX, y * cosX - z * sinX];
+                transformedPts.push({ x: centerX + x * R, y: centerY + y * R, depth: (z + 1) / 2, originalTheta: p.thetaG });
+            });
+
+            if (params.showLines && icoFaces.length > 0) {
+                ctx.lineWidth = params.lineWidth;
+                icoFaces.forEach(face => {
+                    const p1 = transformedPts[face[0]], p2 = transformedPts[face[1]], p3 = transformedPts[face[2]];
+                    if (!p1 || !p2 || !p3) return;
+                    const avgDepth = (p1.depth + p2.depth + p3.depth) / 3;
+                    ctx.globalAlpha = 0.1 + avgDepth * 0.4;
+                    const avgTheta = (p1.originalTheta + p2.originalTheta + p3.originalTheta) / 3;
+                    ctx.strokeStyle = lerpColor(params.color2, params.color1, Math.max(0, Math.min(1, (avgTheta - actualMinThetaG) / actualThetaRange)));
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    const drawSegment = (ptA, ptB) => {
+                        if (params.curveLines) {
+                            const dist = Math.hypot(ptB.x - ptA.x, ptB.y - ptA.y);
+                            const midX = (ptA.x + ptB.x) / 2, midY = (ptA.y + ptB.y) / 2;
+                            const curve = dist * (params.lineCurveIntensity / 100) * 0.8;
+                            const nx = -(ptB.y - ptA.y) / dist, ny = (ptB.x - ptA.x) / dist;
+                            ctx.quadraticCurveTo(midX + nx * curve, midY + ny * curve, ptB.x, ptB.y);
+                        } else { ctx.lineTo(ptB.x, ptB.y); }
+                    };
+                    drawSegment(p1, p2); drawSegment(p2, p3); drawSegment(p3, p1);
+                    ctx.stroke();
+                });
+            }
+
+            transformedPts.forEach((p) => {
+                const pointSize = params.dotSize + p.depth * params.dotSize;
+                if (pointSize > 0) {
+                    ctx.globalAlpha = 0.2 + p.depth * 0.8;
+                    ctx.fillStyle = lerpColor(params.color2, params.color1, Math.max(0, Math.min(1, (p.originalTheta - actualMinThetaG) / actualThetaRange)));
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, pointSize, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            });
+
+            ctx.restore(); // Restore from canvas transformations
+
+            animationFrameId = requestAnimationFrame(draw);
+        }
+
+        function updateTwistDirectionUI() {
+            twistDirBtn.innerHTML = params.twistDir === 1 ? '<svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+        }
+        function updatePlayPauseUI() {
+            const isPlaying = !params.isAnimationPaused;
+            autoAnimToggleBtn.innerHTML = isPlaying ? '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+            autoAnimToggleBtn.dataset.tooltip = isPlaying ? "Pause Animation" : "Play Animation";
+        }
+
+        function initialize() {
+            resize();
+            initBasePts();
+            applyStyleParams(); // Set initial background color
+
+            if (dev_mode) {
+                const openBtn = document.getElementById('open-panel-btn');
+                openBtn.classList.add('is-visible');
+            }
+
+
+            if (params.enableMouseDrag) canvas.style.cursor = 'grab';
+            document.querySelectorAll('input[type=range]').forEach(slider => {
+                const container = slider.closest('.speed-control-slider-container');
+                if (container) {
+                    const maxValSpan = container.querySelector('.max-value');
+                    if (maxValSpan) maxValSpan.textContent = slider.max;
+                    updateThumbValue(slider);
+                    hideThumbValue(slider);
+                }
+            });
+            updateColorPreview(1); updateColorPreview(2);
+            updateRgbaSliders(1, params.color1); updateRgbaSliders(2, params.color2);
+            updateTwistDirectionUI(); updatePlayPauseUI();
+            animationFrameId = requestAnimationFrame(t => { lastFrameTime = t; draw(t); });
+        }
+        initialize();
+
+        // --- Panel Resize & Tooltip Logic ---
+        const panel = document.getElementById('panel');
+        const resizeHandle = document.getElementById('panel-resize-handle');
+        let isResizing = false, startX, startWidth;
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true; startX = e.clientX; startWidth = panel.offsetWidth;
+            document.body.style.userSelect = 'none'; document.body.style.cursor = 'ew-resize';
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            panel.style.width = `${Math.min(600, Math.max(305, startWidth + (e.clientX - startX)))}px`;
+        });
+        document.addEventListener('mouseup', () => {
+            isResizing = false; document.body.style.userSelect = ''; document.body.style.cursor = '';
+        });
+        let currentTooltip = null;
+        document.querySelectorAll('[data-tooltip]').forEach(element => {
+            element.addEventListener('mouseenter', (e) => {
+                if (currentTooltip) currentTooltip.remove();
+                const tooltipText = element.dataset.tooltip;
+                if (tooltipText) {
+                    currentTooltip = document.createElement('div');
+                    currentTooltip.classList.add('custom-tooltip');
+                    currentTooltip.textContent = tooltipText;
+                    document.body.appendChild(currentTooltip);
+                    updateTooltipPosition(e);
+                }
+            });
+            element.addEventListener('mousemove', (e) => { if (currentTooltip) updateTooltipPosition(e); });
+            element.addEventListener('mouseleave', () => { if (currentTooltip) { currentTooltip.remove(); currentTooltip = null; } });
+        });
+        function updateTooltipPosition(e) {
+            if (currentTooltip) {
+                const offsetX = 15, offsetY = 20;
+                let newLeft = e.clientX + offsetX;
+                let newTop = e.clientY - offsetY;
+                if (newLeft + currentTooltip.offsetWidth > window.innerWidth - 10) newLeft = e.clientX - currentTooltip.offsetWidth - offsetX;
+                if (newTop < 10) newTop = e.clientY + offsetY;
+                currentTooltip.style.left = `${newLeft}px`;
+                currentTooltip.style.top = `${newTop}px`;
+            }
+        }
+        color1Preview.addEventListener('click', () => color1Picker.click());
+        color1Picker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, params.color1.a);
+            params.color1 = rgba;
+            updateRgbaSliders(1, params.color1);
+            updateColorPreview(1);
+        });
+        color2Preview.addEventListener('click', () => color2Picker.click());
+        color2Picker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, params.color2.a);
+            params.color2 = rgba;
+            updateRgbaSliders(2, params.color2);
+            updateColorPreview(2);
+        });
+
+        // NEW: Color picker listeners for backgrounds
+        bgColorPreview.addEventListener('click', () => bgColorPicker.click());
+        bgColorPicker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, styleParams.bgColor.a);
+            styleParams.bgColor = rgba;
+            updateRgbaSliders('bg', styleParams.bgColor);
+            applyStyleParams();
+        });
+
+        sphereBgColorPreview.addEventListener('click', () => sphereBgColorPicker.click());
+        sphereBgColorPicker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, styleParams.sphereBgColor.a);
+            styleParams.sphereBgColor = rgba;
+            updateRgbaSliders('sphereBg', styleParams.sphereBgColor);
+            applyStyleParams();
+        });
+
+    </script>
+</body>
+
+</html>

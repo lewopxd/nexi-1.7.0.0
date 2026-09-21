@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toroide de Partículas con WebGL</title>
+    <style>
+        /* Estilos para el fondo y el canvas */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #000014 0%, #000000 100%);
+            height: 100vh;
+            width: 100vw;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* Estilos para el canvas donde se renderiza la escena 3D */
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            /* Efecto de brillo exterior aplicado a todo el canvas */
+            filter:
+                drop-shadow(0 0 5px #00ffdd)
+                drop-shadow(0 0 15px #33ffee)
+                drop-shadow(0 0 30px #00ccff);
+        }
+
+        /* --- UI de Configuración --- */
+        #config-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            width: 48px;
+            height: 48px;
+            display: grid;
+            place-items: center;
+            transition: transform 0.3s ease;
+        }
+        #config-button:hover {
+            transform: rotate(90deg);
+        }
+
+        #settings-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 300px;
+            height: 100%;
+            background: rgba(10, 20, 30, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 99;
+            color: white;
+            padding: 20px;
+            box-sizing: border-box;
+            transform: translateX(-100%);
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            overflow-y: auto;
+        }
+        #settings-panel.open {
+            transform: translateX(0);
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .control-group input {
+            width: 100%;
+        }
+        #rebuild-button {
+            width: 100%;
+            padding: 12px;
+            background: #00ffdd;
+            border: none;
+            color: #000014;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        h3 {
+            margin-top: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Botón para abrir/cerrar el panel -->
+    <div id="config-button" title="Configuración">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2.4l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1 0-2.4l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
+
+    <!-- Panel de Configuración -->
+    <div id="settings-panel">
+        <h3>Configuración</h3>
+        <div class="control-group">
+            <label for="zoom">Zoom <span id="zoom-value"></span></label>
+            <input type="range" id="zoom" min="2" max="10" step="0.1" value="4">
+        </div>
+        <div class="control-group">
+            <label for="deformation">Intensidad de Deformación <span id="deformation-value"></span></label>
+            <input type="range" id="deformation" min="0.0" max="0.5" step="0.01" value="0.15">
+        </div>
+        <div class="control-group">
+            <label for="pulseSpeed">Velocidad de Pulso <span id="pulseSpeed-value"></span></label>
+            <input type="range" id="pulseSpeed" min="0.1" max="5" step="0.1" value="2.15">
+        </div>
+        <div class="control-group">
+            <label for="particleSize">Tamaño de Partículas <span id="particleSize-value"></span></label>
+            <input type="range" id="particleSize" min="0.001" max="0.02" step="0.001" value="0.004">
+        </div>
+        <div class="control-group">
+            <label for="particleOpacity">Opacidad de Partículas <span id="particleOpacity-value"></span></label>
+            <input type="range" id="particleOpacity" min="0.1" max="1.0" step="0.05" value="0.8">
+        </div>
+        <div class="control-group">
+            <label for="coreOpacity">Brillo del Núcleo <span id="coreOpacity-value"></span></label>
+            <input type="range" id="coreOpacity" min="0" max="1" step="0.05" value="0.4">
+        </div>
+        <div class="control-group">
+            <label for="rotationSpeed">Velocidad de Rotación <span id="rotationSpeed-value"></span></label>
+            <input type="range" id="rotationSpeed" min="0" max="0.002" step="0.0001" value="0.0006">
+        </div>
+        <hr>
+        <h3>Avanzado (Requiere Reinicio)</h3>
+        <div class="control-group">
+            <label for="particleCount">Número de Partículas</label>
+            <input type="number" id="particleCount" min="1000" max="50000" step="1000" value="20000">
+        </div>
+        <div class="control-group">
+            <label for="majorRadius">Radio Mayor</label>
+            <input type="number" id="majorRadius" min="0.5" max="3" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+            <label for="minorRadius">Radio Menor</label>
+            <input type="number" id="minorRadius" min="0.1" max="1.5" step="0.05" value="0.35">
+        </div>
+        <button id="rebuild-button">Aplicar y Reiniciar</button>
+    </div>
+
+    <canvas id="bg"></canvas>
+
+    <!-- SHADERS: Código que se ejecuta en la GPU -->
+    <script id="vertexShader" type="x-shader/x-vertex">
+        // Uniforms: Variables pasadas desde JavaScript
+        uniform float uTime;
+        uniform float uDeformation;
+        uniform float uSize;
+
+        // Atributos: Datos de cada vértice (partícula)
+        attribute vec3 color;
+        
+        // Varying: Pasa datos del vertex al fragment shader
+        varying vec3 vColor;
+
+        // Función de ruido Simplex 3D para la deformación
+        // Source: https://github.com/hughsk/glsl-noise/blob/master/src/simplex3d.glsl
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+        vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+        float snoise(vec3 v) {
+            const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+            const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+            vec3 i = floor(v + dot(v, C.yyy));
+            vec3 x0 = v - i + dot(i, C.xxx);
+            vec3 g = step(x0.yzx, x0.xyz);
+            vec3 l = 1.0 - g;
+            vec3 i1 = min(g.xyz, l.zxy);
+            vec3 i2 = max(g.xyz, l.zxy);
+            vec3 x1 = x0 - i1 + C.xxx;
+            vec3 x2 = x0 - i2 + C.yyy;
+            vec3 x3 = x0 - D.yyy;
+            i = mod289(i);
+            vec4 p = permute(permute(permute(
+                i.z + vec4(0.0, i1.z, i2.z, 1.0))
+                + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+                + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+            float n_ = 0.142857142857;
+            vec3 ns = n_ * D.wyz - D.xzx;
+            vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+            vec4 x_ = floor(j * ns.z);
+            vec4 y_ = floor(j - 7.0 * x_);
+            vec4 x = x_ * ns.x + ns.yyyy;
+            vec4 y = y_ * ns.x + ns.yyyy;
+            vec4 h = 1.0 - abs(x) - abs(y);
+            vec4 b0 = vec4(x.xy, y.xy);
+            vec4 b1 = vec4(x.zw, y.zw);
+            vec4 s0 = floor(b0) * 2.0 + 1.0;
+            vec4 s1 = floor(b1) * 2.0 + 1.0;
+            vec4 sh = -step(h, vec4(0.0));
+            vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+            vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+            vec3 p0 = vec3(a0.xy, h.x);
+            vec3 p1 = vec3(a0.zw, h.y);
+            vec3 p2 = vec3(a1.xy, h.z);
+            vec3 p3 = vec3(a1.zw, h.w);
+            vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+            p0 *= norm.x;
+            p1 *= norm.y;
+            p2 *= norm.z;
+            p3 *= norm.w;
+            vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+            m = m * m;
+            return 42.0 * dot(m*m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+        }
+
+        void main() {
+            vColor = color; // Pasa el color al fragment shader
+
+            // --- DEFORMACIÓN ---
+            // Normalizamos la posición para que el ruido no dependa del tamaño del toroide
+            vec3 normalizedPosition = normalize(position);
+            // Calculamos el desplazamiento usando el ruido. Animamos con uTime.
+            float displacement = snoise(normalizedPosition * 3.0 + uTime * 0.5) * uDeformation;
+            vec3 deformedPosition = position + normalizedPosition * displacement;
+
+            // --- POSICIÓN FINAL ---
+            vec4 modelPosition = modelMatrix * vec4(deformedPosition, 1.0);
+            vec4 viewPosition = viewMatrix * modelPosition;
+            vec4 projectedPosition = projectionMatrix * viewPosition;
+
+            gl_Position = projectedPosition;
+            gl_PointSize = uSize;
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform float uOpacity;
+        varying vec3 vColor;
+
+        void main() {
+            // El color de la partícula es el que le pasamos, con la opacidad global.
+            gl_FragColor = vec4(vColor, uOpacity);
+        }
+    </script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, particles, coreMesh, mat, coreMat, clock;
+        let config = {
+            zoom: 10,
+            pulseSpeed: 0,
+            particleSize: 0.004,
+            particleOpacity: 0.8,
+            coreOpacity: 0.4,
+            rotationSpeed: 0.0006,
+            deformation: 0.15,
+            particleCount: 20000,
+            majorRadius: 1.0,
+            minorRadius: 0.35
+        };
+
+        function init() {
+            clock = new THREE.Clock();
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.querySelector('#bg'),
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1;
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            rebuildTorus();
+            setupUI(); // Configurar UI y valores iniciales
+            handleResize();
+            animate();
+        }
+
+        function rebuildTorus() {
+            if (particles) scene.remove(particles);
+            if (coreMesh) scene.remove(coreMesh);
+
+            const N = config.particleCount;
+            const majorR = config.majorRadius;
+            const minorR = config.minorRadius;
+
+            let pos = new Float32Array(N * 3);
+            let color = new Float32Array(N * 3);
+
+            const cnA = new THREE.Color(0x00ffcc);
+            const cnB = new THREE.Color(0x3366ff);
+
+            for (let i = 0; i < N; i++) {
+                const i3 = i * 3;
+                const u = Math.random() * Math.PI * 2;
+                const v = Math.random() * Math.PI * 4;
+
+                const x = (majorR + minorR * Math.cos(v)) * Math.cos(u);
+                const y = (majorR + minorR * Math.cos(v)) * Math.sin(u);
+                const z = minorR * Math.sin(v);
+                pos.set([x, y, z], i3);
+                
+                let t = (v % (Math.PI * 2)) / (Math.PI * 2);
+                let c = cnA.clone().lerp(cnB, t);
+                color.set([c.r, c.g, c.b], i3);
+            }
+
+            let geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(color, 3));
+
+            mat = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uSize: { value: config.particleSize },
+                    uOpacity: { value: config.particleOpacity },
+                    uDeformation: { value: config.deformation }
+                },
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+            });
+
+            particles = new THREE.Points(geo, mat);
+            scene.add(particles);
+
+            const coreGeo = new THREE.SphereGeometry(0.25, 32, 32);
+            coreMat = new THREE.MeshBasicMaterial({
+                color: 0x00ffdd, transparent: true, opacity: config.coreOpacity, wireframe: true
+            });
+            coreMesh = new THREE.Mesh(coreGeo, coreMat);
+            scene.add(coreMesh);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+            const t = performance.now() * 0.001;
+
+            mat.uniforms.uTime.value = elapsedTime;
+            
+            const pulse = 0.5 + 0.5 * Math.sin(Math.PI * config.pulseSpeed * t);
+            mat.uniforms.uSize.value = config.particleSize + (config.particleSize * 3) * pulse;
+            coreMat.opacity = config.coreOpacity * 0.5 + (config.coreOpacity * 0.5) * pulse;
+
+            particles.rotation.y += config.rotationSpeed;
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        function handleResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        }
+        window.addEventListener('resize', handleResize);
+
+        function setupUI() {
+            const panel = document.getElementById('settings-panel');
+            const configBtn = document.getElementById('config-button');
+            configBtn.addEventListener('click', () => panel.classList.toggle('open'));
+
+            const controls = {
+                zoom: { valueEl: 'zoom-value', precision: 1 },
+                deformation: { valueEl: 'deformation-value', precision: 2 },
+                pulseSpeed: { valueEl: 'pulseSpeed-value', precision: 2 },
+                particleSize: { valueEl: 'particleSize-value', precision: 3 },
+                particleOpacity: { valueEl: 'particleOpacity-value', precision: 2 },
+                coreOpacity: { valueEl: 'coreOpacity-value', precision: 2 },
+                rotationSpeed: { valueEl: 'rotationSpeed-value', precision: 4 }
+            };
+
+            for (const [key, control] of Object.entries(controls)) {
+                const slider = document.getElementById(key);
+                const valueEl = document.getElementById(control.valueEl);
+                
+                // Set initial value
+                valueEl.textContent = parseFloat(slider.value).toFixed(control.precision);
+
+                // Add event listener
+                slider.addEventListener('input', e => {
+                    const value = parseFloat(e.target.value);
+                    valueEl.textContent = value.toFixed(control.precision);
+                    
+                    // Update config or uniforms
+                    if (key === 'zoom') {
+                        config.zoom = value;
+                        camera.position.z = value;
+                    } else if (key === 'particleOpacity') {
+                        mat.uniforms.uOpacity.value = value;
+                    } else if (key === 'deformation') {
+                        mat.uniforms.uDeformation.value = value;
+                    } else {
+                        config[key] = value;
+                    }
+                });
+            }
+            
+            document.getElementById('rebuild-button').addEventListener('click', () => {
+                config.particleCount = parseInt(document.getElementById('particleCount').value);
+                config.majorRadius = parseFloat(document.getElementById('majorRadius').value);
+                config.minorRadius = parseFloat(document.getElementById('minorRadius').value);
+                rebuildTorus();
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

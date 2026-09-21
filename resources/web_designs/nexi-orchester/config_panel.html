@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexi Config Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #00d5ff;
+            --accent-glow: rgba(0, 213, 255, 0.35);
+            --accent-dim: rgba(0, 213, 255, 0.12);
+            --bg-glass: rgba(10, 14, 22, 0.92);
+            --border-glass: rgba(0, 213, 255, 0.28);
+            --text-primary: #e0f7fc;
+            --text-muted: #7ca8b8;
+            --surface-hover: rgba(0, 213, 255, 0.18);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: transparent;
+            color: var(--text-primary);
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+
+        #panel-container {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 15px var(--accent-glow);
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border-glass);
+            background: rgba(0, 213, 255, 0.05);
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .panel-title-icon {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+            animation: pulse-dot 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 0.5; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        .btn-close {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-close:hover {
+            color: #ff5577;
+            border-color: rgba(255, 85, 119, 0.4);
+            background: rgba(255, 85, 119, 0.15);
+        }
+
+        /* Tabs */
+        .tabs-bar {
+            display: flex;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--border-glass);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 6px;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(0, 213, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: rgba(0, 213, 255, 0.08);
+        }
+
+        /* Content Area */
+        .content-body {
+            flex: 1 1 0px;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .content-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .content-body::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 4px;
+        }
+        .content-body::-webkit-scrollbar-thumb {
+            background: rgba(0, 213, 255, 0.45);
+            border-radius: 4px;
+            box-shadow: 0 0 6px rgba(0, 213, 255, 0.3);
+        }
+        .content-body::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 213, 255, 0.85);
+            box-shadow: 0 0 10px rgba(0, 213, 255, 0.7);
+        }
+
+        .color-swatches {
+            display: flex;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .color-swatch {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .color-swatch:hover {
+            transform: scale(1.22);
+            border-color: #ffffff;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* Group card */
+        .group-card {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(0, 213, 255, 0.15);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .group-title {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+
+        /* Control rows */
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .control-label {
+            color: var(--text-muted);
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .control-widget {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 90px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(0, 213, 255, 0.2);
+            outline: none;
+            transition: background 0.2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: 0 0 6px var(--accent);
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .val-badge {
+            min-width: 32px;
+            text-align: right;
+            font-size: 10px;
+            font-family: monospace;
+            color: var(--accent);
+        }
+
+        /* Number Inputs */
+        input[type="number"], input[type="text"] {
+            width: 44px;
+            padding: 3px 6px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-glass);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 10px;
+            font-family: monospace;
+            text-align: center;
+            outline: none;
+        }
+        input[type="number"]:focus, input[type="text"]:focus {
+            border-color: var(--accent);
+        }
+
+        /* Checkboxes */
+        input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+        }
+
+        /* Select */
+        select {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-glass);
+            color: var(--text-primary);
+            font-size: 10px;
+            border-radius: 4px;
+            padding: 3px 6px;
+            outline: none;
+        }
+
+        /* Color inputs */
+        .color-picker-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            background: transparent;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch {
+            border: 1px solid var(--border-glass);
+            border-radius: 4px;
+        }
+
+        /* Footer status */
+        .panel-footer {
+            padding: 6px 12px;
+            border-top: 1px solid var(--border-glass);
+            background: rgba(0, 0, 0, 0.4);
+            font-size: 9px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #00ff88;
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #00ff88;
+            box-shadow: 0 0 6px #00ff88;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="panel-container">
+        <!-- Header -->
+        <div class="panel-header">
+            <div class="panel-title">
+                <div class="panel-title-icon"></div>
+                <span>Nexi // Config</span>
+            </div>
+            <button class="btn-close" id="btn-close" title="Cerrar panel">&times;</button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs-bar">
+            <button class="tab-btn active" data-tab="tab-mesh">Malla</button>
+            <button class="tab-btn" data-tab="tab-motion">Mov.</button>
+            <button class="tab-btn" data-tab="tab-effects">Efectos</button>
+            <button class="tab-btn" data-tab="tab-colors">Color</button>
+            <button class="tab-btn" data-tab="tab-text">Texto</button>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content-body">
+            
+            <!-- TAB 1: MALLA & ESTRUCTURA -->
+            <div id="tab-mesh" class="tab-content active">
+                <div class="group-card">
+                    <span class="group-title">Geometría</span>
+                    <div class="control-row">
+                        <span class="control-label">Subdivisiones</span>
+                        <div class="control-widget">
+                            <input type="range" id="subdivisions" min="0" max="5" step="1" value="3">
+                            <span class="val-badge" id="val-subdivisions">3</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Tamaño Puntos</span>
+                        <div class="control-widget">
+                            <input type="range" id="dotSize" min="0.001" max="0.05" step="0.002" value="0.01">
+                            <span class="val-badge" id="val-dotSize">0.01</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Líneas de Malla</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="showLines" checked>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Grosor Línea</span>
+                        <div class="control-widget">
+                            <input type="range" id="lineWidth" min="0.1" max="3" step="0.1" value="0.5">
+                            <span class="val-badge" id="val-lineWidth">0.5</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group-card">
+                    <span class="group-title">Aleatoriedad</span>
+                    <div class="control-row">
+                        <span class="control-label">Radio Random</span>
+                        <div class="control-widget">
+                            <input type="range" id="radRandom" min="0" max="100" step="1" value="0">
+                            <span class="val-badge" id="val-radRandom">0</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Latitud Random</span>
+                        <div class="control-widget">
+                            <input type="range" id="latRandom" min="0" max="100" step="1" value="0">
+                            <span class="val-badge" id="val-latRandom">0</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Longitud Random</span>
+                        <div class="control-widget">
+                            <input type="range" id="lonRandom" min="0" max="100" step="1" value="0">
+                            <span class="val-badge" id="val-lonRandom">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: MOVIMIENTO & GIRO -->
+            <div id="tab-motion" class="tab-content">
+                <div class="group-card">
+                    <span class="group-title">Velocidad de Giro</span>
+                    <div class="control-row">
+                        <span class="control-label">Giro X</span>
+                        <div class="control-widget">
+                            <input type="range" id="speedX" min="-50" max="50" step="1" value="6">
+                            <span class="val-badge" id="val-speedX">6</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Giro Y</span>
+                        <div class="control-widget">
+                            <input type="range" id="speedY" min="-50" max="50" step="1" value="8">
+                            <span class="val-badge" id="val-speedY">8</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Giro Z</span>
+                        <div class="control-widget">
+                            <input type="range" id="speedZ" min="-50" max="50" step="1" value="10">
+                            <span class="val-badge" id="val-speedZ">10</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group-card">
+                    <span class="group-title">Cámara & Zoom</span>
+                    <div class="control-row">
+                        <span class="control-label">Zoom</span>
+                        <div class="control-widget">
+                            <input type="range" id="zoom" min="20" max="150" step="1" value="75">
+                            <span class="val-badge" id="val-zoom">75</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Rotar con Mouse</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="enableMouseDrag" checked>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: EFECTOS (PULSE & TWIST & WAVES) -->
+            <div id="tab-effects" class="tab-content">
+                <div class="group-card">
+                    <span class="group-title">Pulsación</span>
+                    <div class="control-row">
+                        <span class="control-label">Activar Pulso</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="enablePulse" checked>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Tipo de Pulso</span>
+                        <div class="control-widget">
+                            <select id="pulseType">
+                                <option value="bounce">Bounce</option>
+                                <option value="rebound">Rebound</option>
+                                <option value="heartbeat">Heartbeat</option>
+                                <option value="breathe">Breathe</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Radio Pulso</span>
+                        <div class="control-widget">
+                            <input type="range" id="pulseRadius" min="1" max="25" step="1" value="4">
+                            <span class="val-badge" id="val-pulseRadius">4</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Velocidad</span>
+                        <div class="control-widget">
+                            <input type="range" id="pulseSpeed" min="5" max="100" step="1" value="20">
+                            <span class="val-badge" id="val-pulseSpeed">20</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group-card">
+                    <span class="group-title">Torsión (Twist)</span>
+                    <div class="control-row">
+                        <span class="control-label">Activar Twist</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="enableTwist">
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Intensidad</span>
+                        <div class="control-widget">
+                            <input type="range" id="twistIntensity" min="0" max="100" step="1" value="50">
+                            <span class="val-badge" id="val-twistIntensity">50</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group-card">
+                    <span class="group-title">Ondas Mórficas</span>
+                    <div class="control-row">
+                        <span class="control-label">Activar Ondas</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="morphicEffects">
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Intensidad</span>
+                        <div class="control-widget">
+                            <input type="range" id="waveIntensity" min="0" max="100" step="1" value="50">
+                            <span class="val-badge" id="val-waveIntensity">50</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: COLORES -->
+            <div id="tab-colors" class="tab-content">
+                <div class="group-card">
+                    <span class="group-title">Gradiente de la Esfera</span>
+                    <div class="control-row">
+                        <span class="control-label">Color Superior</span>
+                        <div class="color-picker-row">
+                            <input type="color" id="picker-color1" value="#00d5ff">
+                            <span class="val-badge" id="hex-color1">#00d5ff</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Color Inferior</span>
+                        <div class="color-picker-row">
+                            <input type="color" id="picker-color2" value="#00d5ff">
+                            <span class="val-badge" id="hex-color2">#00d5ff</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="group-card">
+                    <span class="group-title">Color de Texto Orbital</span>
+                    <div class="control-row">
+                        <span class="control-label">Color Neón</span>
+                        <div class="color-picker-row">
+                            <input type="color" id="picker-textColor-sync" value="#00d5ff">
+                            <span class="val-badge" id="hex-textColor-sync">#00d5ff</span>
+                        </div>
+                    </div>
+                    <div class="color-swatches" id="color-swatches-sync">
+                        <div class="color-swatch" style="background:#00d5ff;" data-color="#00d5ff" title="Cyan"></div>
+                        <div class="color-swatch" style="background:#00ff88;" data-color="#00ff88" title="Neón Verde"></div>
+                        <div class="color-swatch" style="background:#ffffff;" data-color="#ffffff" title="Blanco Cristal"></div>
+                        <div class="color-swatch" style="background:#bf00ff;" data-color="#bf00ff" title="Violeta"></div>
+                        <div class="color-swatch" style="background:#ffaa00;" data-color="#ffaa00" title="Ámbar"></div>
+                        <div class="color-swatch" style="background:#ff3366;" data-color="#ff3366" title="Fucsia"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: TEXTO / WIDGETS -->
+            <div id="tab-text" class="tab-content">
+                <div class="group-card">
+                    <span class="group-title">Widget de Texto</span>
+                    <div class="control-row">
+                        <span class="control-label">Activar Texto Giratorio</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="text-enabled" checked>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Modo / Tipo</span>
+                        <div class="control-widget">
+                            <select id="text-widgetType">
+                                <option value="clock" selected>Hora en Vivo</option>
+                                <option value="custom">Texto Libre</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estilo Neón & Color (Arriba y Prominente) -->
+                <div class="group-card">
+                    <span class="group-title">Color & Estilo Neón</span>
+                    <div class="control-row">
+                        <span class="control-label">Color Texto</span>
+                        <div class="control-widget">
+                            <div class="color-picker-row">
+                                <input type="color" id="picker-textColor" value="#00d5ff">
+                                <span class="val-badge" id="hex-textColor">#00d5ff</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="color-swatches" id="color-swatches-main">
+                        <div class="color-swatch" style="background:#00d5ff;" data-color="#00d5ff" title="Cyan"></div>
+                        <div class="color-swatch" style="background:#00ff88;" data-color="#00ff88" title="Neón Verde"></div>
+                        <div class="color-swatch" style="background:#ffffff;" data-color="#ffffff" title="Blanco Cristal"></div>
+                        <div class="color-swatch" style="background:#bf00ff;" data-color="#bf00ff" title="Violeta"></div>
+                        <div class="color-swatch" style="background:#ffaa00;" data-color="#ffaa00" title="Ámbar"></div>
+                        <div class="color-swatch" style="background:#ff3366;" data-color="#ff3366" title="Fucsia"></div>
+                    </div>
+                    <div class="control-row" style="margin-top: 6px;">
+                        <span class="control-label">Resplandor (Glow)</span>
+                        <div class="control-widget">
+                            <input type="range" id="text-textGlow" min="0" max="25" step="1" value="10">
+                            <span class="val-badge" id="val-text-textGlow">10</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Atenuar Letras Traseras</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="text-depthFade" checked>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Órbita 3D -->
+                <div class="group-card">
+                    <span class="group-title">Órbita 3D</span>
+                    <div class="control-row">
+                        <span class="control-label">Inclinación (Tilt °)</span>
+                        <div class="control-widget">
+                            <input type="range" id="text-textTilt" min="-90" max="90" step="1" value="16">
+                            <span class="val-badge" id="val-text-textTilt">16</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Velocidad Giro</span>
+                        <div class="control-widget">
+                            <input type="range" id="text-textSpeed" min="-8" max="8" step="0.2" value="1.8">
+                            <span class="val-badge" id="val-text-textSpeed">1.8</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Radio Órbita</span>
+                        <div class="control-widget">
+                            <input type="range" id="text-textRadius" min="0.8" max="2.2" step="0.02" value="1.25">
+                            <span class="val-badge" id="val-text-textRadius">1.25</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Tamaño Letra</span>
+                        <div class="control-widget">
+                            <input type="range" id="text-textSize" min="8" max="26" step="1" value="13">
+                            <span class="val-badge" id="val-text-textSize">13</span>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Repeticiones 360°</span>
+                        <div class="control-widget">
+                            <input type="range" id="text-repeats" min="1" max="4" step="1" value="2">
+                            <span class="val-badge" id="val-text-repeats">2</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opciones de Modo Hora -->
+                <div class="group-card" id="card-clock-options">
+                    <span class="group-title">Configuración de Reloj</span>
+                    <div class="control-row">
+                        <span class="control-label">Formato de Hora</span>
+                        <div class="control-widget">
+                            <select id="text-clockFormat">
+                                <option value="24h" selected>24 Horas (HH:MM)</option>
+                                <option value="12h">12 Horas (AM/PM)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Mostrar Segundos</span>
+                        <div class="control-widget">
+                            <input type="checkbox" id="text-showSeconds" checked>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Etiqueta Acompañante</span>
+                        <div class="control-widget" style="width: 130px;">
+                            <input type="text" id="text-clockSuffix" value=" • NEXI AI • " style="width: 100%; font-size: 10px; padding: 3px 6px;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opciones de Texto Personalizado -->
+                <div class="group-card" id="card-custom-options" style="display: none;">
+                    <span class="group-title">Texto Personalizado</span>
+                    <div class="control-row">
+                        <span class="control-label">Mensaje</span>
+                        <div class="control-widget" style="width: 140px;">
+                            <input type="text" id="text-customText" value="NEXI SYSTEM ONLINE • 2026 • " style="width: 100%; font-size: 10px; padding: 3px 6px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer status -->
+        <div class="panel-footer">
+            <div class="status-pill">
+                <div class="status-dot"></div>
+                <span id="conn-status">Conectado a Esfera</span>
+            </div>
+            <span>NexiBus v1.0</span>
+        </div>
+    </div>
+
+    <!-- Script NexiBus -->
+    <script src="js/nexi_bus.js"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const bus = new NexiBus('config-panel', { debug: false });
+
+        // Tab Switching
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                const targetTab = document.getElementById(btn.dataset.tab);
+                if (targetTab) targetTab.classList.add('active');
+            });
+        });
+
+        // Botón Cerrar
+        document.getElementById('btn-close').addEventListener('click', () => {
+            bus.send('orchester', 'CLOSE_CONFIG').catch(() => {});
+        });
+
+        // Mapeo de sliders e inputs a params
+        const paramSliders = [
+            'subdivisions', 'dotSize', 'lineWidth', 'radRandom', 'latRandom', 'lonRandom',
+            'speedX', 'speedY', 'speedZ', 'zoom', 'pulseRadius', 'pulseSpeed',
+            'twistIntensity', 'waveIntensity'
+        ];
+
+        paramSliders.forEach(id => {
+            const input = document.getElementById(id);
+            const badge = document.getElementById(`val-${id}`);
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    const val = Number(e.target.value);
+                    if (badge) badge.textContent = val;
+                    bus.send('sphere', 'SET_PARAM', { key: id, value: val });
+                });
+            }
+        });
+
+        // Mapeo de Checkboxes
+        const paramCheckboxes = [
+            'showLines', 'enableMouseDrag', 'enablePulse', 'enableTwist', 'morphicEffects'
+        ];
+        paramCheckboxes.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', (e) => {
+                    bus.send('sphere', 'SET_PARAM', { key: id, value: e.target.checked });
+                });
+            }
+        });
+
+        // Pulse type selector
+        const pulseSelect = document.getElementById('pulseType');
+        if (pulseSelect) {
+            pulseSelect.addEventListener('change', (e) => {
+                bus.send('sphere', 'SET_PARAM', { key: 'pulseType', value: e.target.value });
+            });
+        }
+
+        // Color pickers
+        function hexToRgb(hex) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return { r, g, b, a: 1 };
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        ['color1', 'color2'].forEach(cKey => {
+            const picker = document.getElementById(`picker-${cKey}`);
+            const badge = document.getElementById(`hex-${cKey}`);
+            if (picker) {
+                picker.addEventListener('input', (e) => {
+                    const hex = e.target.value;
+                    if (badge) badge.textContent = hex;
+                    const rgb = hexToRgb(hex);
+                    bus.send('sphere', 'SET_PARAM', { key: cKey, value: rgb });
+                });
+            }
+        });
+
+        // =====================================================================
+        // CONTROLES DEL WIDGET DE TEXTO / HORA
+        // =====================================================================
+        const textSliders = [
+            { id: 'text-textTilt', key: 'textTilt' },
+            { id: 'text-textSpeed', key: 'textSpeed' },
+            { id: 'text-textRadius', key: 'textRadius' },
+            { id: 'text-textSize', key: 'textSize' },
+            { id: 'text-repeats', key: 'repeats' },
+            { id: 'text-textGlow', key: 'textGlow' }
+        ];
+
+        textSliders.forEach(({ id, key }) => {
+            const input = document.getElementById(id);
+            const badge = document.getElementById(`val-${id}`);
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    const val = Number(e.target.value);
+                    if (badge) badge.textContent = val;
+                    bus.send('sphere', 'SET_TEXT_PARAM', { key, value: val }).catch(() => {});
+                });
+            }
+        });
+
+        const textCheckboxes = [
+            { id: 'text-enabled', key: 'enabled' },
+            { id: 'text-showSeconds', key: 'showSeconds' },
+            { id: 'text-depthFade', key: 'depthFade' }
+        ];
+
+        textCheckboxes.forEach(({ id, key }) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    bus.send('sphere', 'SET_TEXT_PARAM', { key, value: isChecked }).catch(() => {});
+                });
+            }
+        });
+
+        const widgetTypeSelect = document.getElementById('text-widgetType');
+        const cardClock = document.getElementById('card-clock-options');
+        const cardCustom = document.getElementById('card-custom-options');
+
+        function updateWidgetTypeUI(type) {
+            if (type === 'custom') {
+                if (cardClock) cardClock.style.display = 'none';
+                if (cardCustom) cardCustom.style.display = 'flex';
+            } else {
+                if (cardClock) cardClock.style.display = 'flex';
+                if (cardCustom) cardCustom.style.display = 'none';
+            }
+        }
+
+        if (widgetTypeSelect) {
+            widgetTypeSelect.addEventListener('change', (e) => {
+                const type = e.target.value;
+                updateWidgetTypeUI(type);
+                bus.send('sphere', 'SET_TEXT_PARAM', { key: 'widgetType', value: type }).catch(() => {});
+            });
+        }
+
+        const clockFormatSelect = document.getElementById('text-clockFormat');
+        if (clockFormatSelect) {
+            clockFormatSelect.addEventListener('change', (e) => {
+                bus.send('sphere', 'SET_TEXT_PARAM', { key: 'clockFormat', value: e.target.value }).catch(() => {});
+            });
+        }
+
+        const clockSuffixInput = document.getElementById('text-clockSuffix');
+        if (clockSuffixInput) {
+            clockSuffixInput.addEventListener('input', (e) => {
+                bus.send('sphere', 'SET_TEXT_PARAM', { key: 'clockSuffix', value: e.target.value }).catch(() => {});
+            });
+        }
+
+        const customTextInput = document.getElementById('text-customText');
+        if (customTextInput) {
+            customTextInput.addEventListener('input', (e) => {
+                bus.send('sphere', 'SET_TEXT_PARAM', { key: 'customText', value: e.target.value }).catch(() => {});
+            });
+        }
+
+        // Sincronización bidireccional de los dos selectores de color de texto y swatches
+        const textColorPicker = document.getElementById('picker-textColor');
+        const textColorBadge = document.getElementById('hex-textColor');
+        const textColorSyncPicker = document.getElementById('picker-textColor-sync');
+        const textColorSyncBadge = document.getElementById('hex-textColor-sync');
+
+        function applyTextColor(hex) {
+            if (textColorPicker) textColorPicker.value = hex;
+            if (textColorBadge) textColorBadge.textContent = hex;
+            if (textColorSyncPicker) textColorSyncPicker.value = hex;
+            if (textColorSyncBadge) textColorSyncBadge.textContent = hex;
+            bus.send('sphere', 'SET_TEXT_PARAM', { key: 'textColor', value: hex }).catch(() => {});
+        }
+
+        if (textColorPicker) {
+            textColorPicker.addEventListener('input', (e) => applyTextColor(e.target.value));
+        }
+        if (textColorSyncPicker) {
+            textColorSyncPicker.addEventListener('input', (e) => applyTextColor(e.target.value));
+        }
+
+        // Swatches en pestaña de Texto y de Color
+        document.querySelectorAll('.color-swatches .color-swatch').forEach(swatch => {
+            swatch.addEventListener('click', () => {
+                const color = swatch.dataset.color;
+                if (color) applyTextColor(color);
+            });
+        });
+
+        // Sincronizar estado inicial desde la esfera
+        async function syncInitialState() {
+            const statusEl = document.getElementById('conn-status');
+            try {
+                const state = await bus.send('sphere', 'GET_STATE', {}, { timeoutMs: 1200, maxRetries: 5 });
+                if (state) {
+                    if (state.params) {
+                        const p = state.params;
+                        // Actualizar sliders
+                        paramSliders.forEach(id => {
+                            if (id in p) {
+                                const input = document.getElementById(id);
+                                const badge = document.getElementById(`val-${id}`);
+                                if (input) input.value = p[id];
+                                if (badge) badge.textContent = p[id];
+                            }
+                        });
+                        // Actualizar checkboxes
+                        paramCheckboxes.forEach(id => {
+                            if (id in p) {
+                                const input = document.getElementById(id);
+                                if (input) input.checked = !!p[id];
+                            }
+                        });
+                        // Select
+                        if (p.pulseType && pulseSelect) {
+                            pulseSelect.value = p.pulseType;
+                        }
+                        // Colores
+                        if (p.color1) {
+                            const hex1 = rgbToHex(p.color1.r, p.color1.g, p.color1.b);
+                            const pick1 = document.getElementById('picker-color1');
+                            if (pick1) pick1.value = hex1;
+                            const badge1 = document.getElementById('hex-color1');
+                            if (badge1) badge1.textContent = hex1;
+                        }
+                        if (p.color2) {
+                            const hex2 = rgbToHex(p.color2.r, p.color2.g, p.color2.b);
+                            const pick2 = document.getElementById('picker-color2');
+                            if (pick2) pick2.value = hex2;
+                            const badge2 = document.getElementById('hex-color2');
+                            if (badge2) badge2.textContent = hex2;
+                        }
+                    }
+
+                    // Sincronizar parámetros de Texto y Widgets
+                    if (state.textParams) {
+                        const tp = state.textParams;
+                        textSliders.forEach(({ id, key }) => {
+                            if (key in tp) {
+                                const input = document.getElementById(id);
+                                const badge = document.getElementById(`val-${id}`);
+                                if (input) input.value = tp[key];
+                                if (badge) badge.textContent = tp[key];
+                            }
+                        });
+                        textCheckboxes.forEach(({ id, key }) => {
+                            if (key in tp) {
+                                const input = document.getElementById(id);
+                                if (input) input.checked = !!tp[key];
+                            }
+                        });
+                        if (tp.widgetType && widgetTypeSelect) {
+                            widgetTypeSelect.value = tp.widgetType;
+                            updateWidgetTypeUI(tp.widgetType);
+                        }
+                        if (tp.clockFormat && clockFormatSelect) {
+                            clockFormatSelect.value = tp.clockFormat;
+                        }
+                        if (tp.clockSuffix && clockSuffixInput) {
+                            clockSuffixInput.value = tp.clockSuffix;
+                        }
+                        if (tp.customText && customTextInput) {
+                            customTextInput.value = tp.customText;
+                        }
+                        if (tp.textColor) {
+                            applyTextColor(tp.textColor);
+                        }
+                    }
+                }
+                if (statusEl) statusEl.textContent = 'Esfera Sincronizada';
+            } catch (err) {
+                if (statusEl) statusEl.textContent = 'Esperando Esfera...';
+                setTimeout(syncInitialState, 500);
+            }
+        }
+
+        syncInitialState();
+    });
+    </script>
+</body>
+</html>

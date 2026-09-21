@@ -1,0 +1,412 @@
+:root {
+    --bg: #1e1e2e;
+    --fg: #cdd6f4;
+    --info: #89b4fa;
+    --error: #f38ba8;
+    --alert: #fab387;
+    --note: #a6e3a1;
+    --border: #585b70;
+    --gap: 12px;
+
+    /* Fondo de filas */
+    --row-bg: #171723;
+    --row-bg-alt: #11111b;
+}
+
+body {
+    font-family: 'Segoe UI', 'Helvetica', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    margin: 0;
+    padding: 20px;
+    line-height: 1.6;
+}
+
+header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+/* === TÍTULO Y BOTÓN === */
+.header-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--gap);
+    margin-bottom: 8px;
+}
+
+.app-title {
+    display: flex;
+    align-items: center;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--info);
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.title-main { white-space: nowrap; }
+
+.title-version {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: #94e2d5;
+    background: rgba(148, 226, 213, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.load-btn {
+    background: var(--info);
+    color: var(--bg);
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+
+.load-btn:hover { opacity: 0.9; }
+
+/* === META INFO === */
+.system-info {
+    font-size: 0.9em;
+    color: #94e2d5;
+    margin: 8px 0;
+    font-weight: 500;
+}
+
+.meta-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap);
+    width: 100%;
+}
+
+.meta-item {
+    flex: 1 1 auto;
+    min-width: min-content;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    background: rgba(137, 180, 250, 0.1);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.meta-label {
+    font-weight: 600;
+    color: var(--info);
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.meta-value {
+    margin-top: 2px;
+    word-break: break-word;
+    white-space: normal;
+}
+
+/* === FILTROS === */
+.filters-wrapper {
+    background: rgba(30, 30, 46, 0.4); /* Fondo oscuro con transparencia */
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 0 0 16px;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.filters-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+}
+
+.search-box {
+    flex: 1;
+    min-width: 200px; }
+
+.search-input {
+    width: 100%;
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--fg);
+    font-size: 0.8em;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.search-input:focus {
+    border-color: var(--info);
+    box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.2);
+}
+
+.type-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+
+.filter-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-tag input[type="checkbox"] {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-tag input[type="checkbox"]::after {
+    content: '\2713';
+    color: transparent;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.filter-tag input[type="checkbox"]:checked {
+    background: var(--info);
+    border-color: var(--info);
+}
+
+.filter-tag input[type="checkbox"]:checked::after {
+    color: var(--bg);
+    opacity: 1;
+}
+
+.tag {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-family: monospace;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.type-info  { color: var(--info); background: rgba(137, 180, 250, 0.1); }
+.type-error { color: var(--error); background: rgba(243, 139, 168, 0.1); }
+.type-alert { color: var(--alert); background: rgba(250, 179, 135, 0.1); }
+.type-note  { color: var(--note); background: rgba(166, 227, 161, 0.1); }
+
+/* === TABLA DE LOGS (alineación perfecta) === */
+.table-container {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    /* Añadimos el scroll aquí */
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+/* Mantener comportamiento nativo de tabla */
+#logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: auto;
+    font-size: 0.9em;
+    margin: 0;
+
+
+
+}
+
+#logs-table thead th {
+    position: sticky;
+    top: 0;
+    background: #25253a;
+    color: var(--info);
+    font-weight: 400;
+    padding: 3px 10px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 2;
+    border-bottom: 1px solid var(--border);
+
+
+}
+
+#logs-table tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#logs-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+#logs-table td {
+    padding: 6px 10px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9em;
+}
+
+/* Columnas auto-ajustables con mínimos */
+#logs-table th,
+#logs-table td {
+    min-width: 60px;
+}
+
+#logs-table th:nth-child(1),
+#logs-table td:nth-child(1),
+#logs-table th:nth-child(2),
+#logs-table td:nth-child(2) {
+    /* eliminar tamaños fijos y fuentes distintas */
+    min-width: auto;
+}
+
+/* Permitir que la última columna se adapte y envuelva */
+#logs-table th:nth-child(7),
+#logs-table td:nth-child(7) {
+    min-width: 200px;
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* Colores y estilos */
+.timestamp { color: #94e2d5; }
+.name      { color: #f9e2af; }
+.file      { color: #cba6f7; }
+
+.name.unregistered {
+    color: #9ca3af;
+    opacity: 0.5;
+    font-style: italic;
+}
+
+/* --- PERSONALIZACIÓN DE SCROLLBARS (funciona ahora) --- */
+
+/* WebKit: Chrome, Edge, Safari */
+.table-container::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background: rgba(30, 30, 46, 0.6);
+    border-radius: 6px;
+    border: 1px solid rgba(88, 89, 112, 0.2);
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: linear-gradient(45deg, #585b7080, #89b4fa40);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: all 0.2s ease;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(45deg, #585b70aa, #89b4fa66);
+    scale: 1.05;
+}
+
+.table-container::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(45deg, #585b70cc, #89b4faaa);
+}
+
+.table-container::-webkit-scrollbar-corner {
+    background: rgba(30, 30, 46, 0.8);
+    border-radius: 6px;
+}
+
+/* Firefox: scrollbar más moderno */
+.table-container {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(137, 180, 250, 0.6) rgba(30, 30, 46, 0.6);
+}
+
+
+
+
+#logs-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #25253a;
+    /* ⚠️ No pongas el borde aquí todavía */
+}
+
+#logs-table thead::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--border);
+    /* O usa una sombra para un efecto más suave */
+    /* box-shadow: 0 1px 0 rgba(88, 89, 112, 0.5); */
+}
+
+
+/* === MENSAJE INICIAL === */
+.initial-message {
+    text-align: center;
+    font-size: 1.2em;
+    color: var(--fg);
+    margin-top: 100px;
+    opacity: 0.3;
+}
+
+/* === INDICADOR DE CARGA === */
+.loading-indicator {
+    text-align: center;
+    font-size: 1.1em;
+    color: var(--info);
+    margin-top: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(137, 180, 250, 0.3);
+    border-top: 4px solid var(--info);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

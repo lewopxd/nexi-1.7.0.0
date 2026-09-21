@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+
+<!-- 
+======================================================================
+     COMENTARIOS DE OPTIMIZACIÓN - SPHERE V5.84
+======================================================================
+
+1. ARQUITECTURA DE EJECUCIÓN: WEB WORKER
+   - Causa: El cálculo de la posición 3D para miles de vértices en cada frame es una tarea intensiva que bloqueaba el hilo principal, causando falta de respuesta en la UI.
+   - Solución: Se ha movido toda la lógica de cálculo (generación de icosfera, rotaciones, efectos de twist, morphing y aleatoriedad) a un Web Worker.
+   - Resultado: El hilo principal ahora se dedica exclusivamente a gestionar la interfaz de usuario y a renderizar los datos ya procesados, manteniendo la aplicación fluida y receptiva.
+
+2. COMUNICACIÓN ASÍNCRONA Y TRANSFERENCIA DE DATOS
+   - Causa: La comunicación entre el hilo principal y el worker puede ser un cuello de botella si no se gestiona eficientemente.
+   - Solución:
+     a) El hilo principal envía un pequeño objeto de estado (`params`) al worker en cada frame.
+     b) El worker devuelve los resultados (las coordenadas finales de los vértices) como un `ArrayBuffer` utilizando la API de "Transferable Objects".
+   - Resultado: Esta transferencia de datos es una operación de "zero-copy" (sin duplicación de memoria), lo que la hace casi instantánea y evita la sobrecarga de serialización/deserialización de datos pesados como JSON.
+
+3. ESTRUCTURA DE DATOS OPTIMIZADA: TYPEDARRAYS
+   - Causa: El uso de arrays de objetos (`[{x,y,z}, ...]`) para almacenar los vértices genera una alta presión sobre el recolector de basura (Garbage Collector), provocando pausas y "tirones" (jank) en la animación.
+   - Solución: Se ha refactorizado toda la gestión de datos para usar `TypedArrays` (`Float32Array` para posiciones, `Uint32Array` para las caras).
+   - Resultado: Los datos se almacenan en bloques de memoria contiguos, lo que permite un acceso más rápido por parte del motor de JavaScript y reduce drásticamente la creación de objetos temporales, minimizando la actividad del recolector de basura.
+
+4. SEPARACIÓN DE LÓGICA Y RENDERIZADO
+   - Causa: Mezclar la lógica de cálculo con la de dibujado en la misma función (`draw`) dificulta la optimización y el mantenimiento.
+   - Solución: La función `draw` en el hilo principal ahora solo se encarga de la lógica de animación (actualizar ángulos, fase del pulso) y de enviar los datos al worker. Una nueva función, `renderFrame`, recibe los datos precalculados del worker y se dedica exclusivamente a las operaciones de dibujado en el canvas.
+   - Resultado: Un código más limpio, organizado y con responsabilidades claramente definidas, lo que facilita futuras optimizaciones.
+
+-->
+
+
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sphere v5.84 - Final Controls Fixed</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --panel-accent-color: rgba(0, 255, 255, 1);
+            --panel-accent-color-translucent: rgba(0, 255, 255, 0.2);
+            --container-border-color: rgba(0, 255, 255, 0.4);
+        }
+        body {
+            margin: 0; padding: 0; box-sizing: border-box;
+            background: #00000000; color: var(--panel-accent-color);
+            font-family: 'Inter', monospace; overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+        #container {
+            position: relative; width: 100vw; height: 100vh;
+            overflow: hidden; display: flex; justify-content: center;
+            align-items: center; perspective: 1000px;
+        }
+        canvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; z-index: 1;
+        }
+        #panel-wrapper {
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
+            transform: translateX(0); opacity: 1;
+        }
+        #panel-wrapper.is-hidden {
+            transform: translateX(-120%); opacity: 0; pointer-events: none;
+        }
+        #panel {
+            position: relative; background: rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--panel-accent-color); border-radius: 12px;
+            padding: 15px; display: flex; flex-direction: column;
+            gap: 10px; align-items: center; width: 305px;
+            min-width: 305px; max-width: 600px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto; overflow-x: hidden;
+        }
+        #panel::-webkit-scrollbar { width: 4px; }
+        #panel::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); border-radius: 10px; }
+        #panel::-webkit-scrollbar-thumb { background-color: var(--panel-accent-color); border-radius: 10px; border: 1px solid rgba(0,0,0,0.8); }
+        #panel::-webkit-scrollbar-thumb:hover { background-color: #5ff; }
+        #open-panel-btn {
+            position: absolute; top: 10px; left: 10px; transform: none;
+            z-index: 2; background: rgba(0,0,0,0.9); border: 1px solid var(--panel-accent-color);
+            border-radius: 50%; width: 24px; height: 24px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+            opacity: 0; pointer-events: none;
+        }
+        #open-panel-btn.is-visible { opacity: 1; pointer-events: auto; }
+        #open-panel-btn svg { width: 16px; height: 16px; fill: var(--panel-accent-color); }
+        #close-panel-btn {
+            position: absolute; top: -10px; left: -10px; background: rgba(0,0,0,0.9);
+            border: 1px solid var(--panel-accent-color); border-radius: 50%;
+            width: 24px; height: 24px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; z-index: 5;
+        }
+        #close-panel-btn svg { width: 14px; height: 14px; fill: var(--panel-accent-color); }
+        #panel-resize-handle {
+            position: absolute; right: 0; top: 0; bottom: 0;
+            width: 10px; cursor: ew-resize; background: transparent; z-index: 4;
+        }
+        .row, .row2, .row3 { display: grid; gap: 10px; align-items: center; width: 100%; }
+        .row2 { grid-template-columns: 1fr 1fr; }
+        .row3 { grid-template-columns: 1fr; }
+        .row { grid-template-columns: 1fr 1fr 1fr; }
+        .giro-container { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; width: 100%; justify-content: center; }
+        .giro-item, .control-bordered-item, .rand-lat, .rand-lon, .rand-rad { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--container-border-color); padding: 15px 8px 8px; border-radius: 8px; flex: 1; position: relative; gap: 8px; }
+        .item-title { position: absolute; top: -8px; left: 10px; background: rgba(0,0,0,0.9); padding: 0 5px; font-size: 12px; color: var(--panel-accent-color); z-index: 4; white-space: nowrap; }
+        .control { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+        .angle-display-control { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .speed-control-wrapper { display: flex; align-items: center; width: 100%; gap: 5px; position: relative; }
+        .speed-control-slider-container { flex-grow: 1; display: flex; align-items: center; gap: 5px; position: relative; width: 100%; }
+        .control-row { display: flex; align-items: center; gap: 6px; }
+        .line-controls-container { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+        .curve-controls-row { display: flex; align-items: center; width: 100%; gap: 5px; }
+        .inc-decr-stack { display: flex; flex-direction: column; gap: 2px; }
+        input[type=text] { background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; color: var(--panel-accent-color); padding: 6px; width: 35px; text-align: center; -moz-appearance: textfield; font-size: 10px; }
+        input[type=text].wide-input { width: 100%; box-sizing: border-box; }
+        input[type=text]::-webkit-outer-spin-button, input[type=text]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .btn { background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; padding: 4px 10px; display: flex; align-items: center; justify-content: center; color: var(--panel-accent-color); cursor: pointer; user-select: none; font-size: 14px; height: 30px; transition: background-color 0.2s, color 0.2s; }
+        .btn:hover { background-color: var(--panel-accent-color); color: #000; }
+        .small-btn { padding: 0 6px; height: 13px; font-size: 10px; line-height: 1; }
+        input[type=range] { -webkit-appearance: none; width: 100%; height: 2px; background: transparent; margin-top: 0; flex-grow: 1; }
+        input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--panel-accent-color); border-radius: 1px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #000; border: 1px solid var(--panel-accent-color); border-radius: 50%; margin-top: -5px; cursor: grab; transition: background-color 0.2s, border-color 0.2s; }
+        input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; }
+        input[type=range]:focus { outline: none; }
+        hr { border: none; border-top: 0.4px solid var(--panel-accent-color); width: 100%; margin: 15px 0; }
+        .subsection-divider { margin-bottom: 25px; }
+        .select-btn { appearance: none; -webkit-appearance: none; background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; color: var(--panel-accent-color); cursor: pointer; user-select: none; font-size: 12px; height: 24px; transition: background-color 0.2s, color 0.2s; }
+        .select-btn:hover { background-color: var(--panel-accent-color); color: #000; }
+        select.select-btn { background-image: url('data:image/svg+xml;utf8,<svg fill="%2300ffff" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>'); background-repeat: no-repeat; background-position: right 5px center; background-size: 12px; padding-right: 20px; }
+        select.select-btn option { background-color: #000; color: var(--panel-accent-color); }
+        .custom-tooltip { position: fixed; background: rgba(0, 0, 0, 0.9); color: var(--panel-accent-color); padding: 5px 8px; border-radius: 4px; font-size: 11px; z-index: 1000; pointer-events: none; white-space: nowrap; }
+        .speed-control-slider-container .min-value, .speed-control-slider-container .max-value { font-size: 10px; color: var(--panel-accent-color); user-select: none; white-space: nowrap; }
+        .slider-thumb-value { position: absolute; background: rgba(0, 0, 0, 0.7); color: var(--panel-accent-color); padding: 2px 5px; border-radius: 4px; font-size: 10px; white-space: nowrap; pointer-events: none; transform: translateX(-50%); top: -19px; display: none; z-index: 5; }
+        .multiplier-control-group { width: 100%; margin-top: 10px; padding: 0 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .collapsible-section { width: 100%; display: flex; flex-direction: row; align-items: flex-start; gap: 5px; }
+        .section-header { display: flex; align-items: center; cursor: pointer; user-select: none; padding-top: 5px; flex-shrink: 0; position: relative; height: 20px; }
+        .arrow-icon { width: 16px; height: 16px; fill: var(--panel-accent-color); transition: transform 0.3s ease; }
+        .section-title { display: none; font-size: 12px; font-weight: bold; }
+        .section-content { flex-grow: 1; max-height: 1000px; overflow: hidden; transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out, padding-top 0.4s ease-in-out; opacity: 1; padding-top: 10px; }
+        #animation-section > .section-content { display: flex; flex-direction: column; gap: 10px; }
+        .collapsible-section.collapsed .arrow-icon { transform: rotate(-90deg); }
+        .collapsible-section.collapsed .section-title { display: inline; position: absolute; left: 20px; top: 50%; transform: translateY(-50%); white-space: nowrap; font-weight: normal; }
+        .collapsible-section.collapsed .section-content { max-height: 0; opacity: 0; pointer-events: none; padding-top: 0; }
+        .collapsible-section.collapsed + hr { margin: 5px 0; }
+        .checkbox-title { display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; }
+        .checkbox-title input[type="checkbox"]{ appearance: none; width: 14px; height: 14px; border: 1px solid var(--panel-accent-color); border-radius: 3px; cursor: pointer; position: relative; top: 1px; }
+        .checkbox-title input[type="checkbox"]:checked { background-color: var(--panel-accent-color); }
+        .checkbox-title input[type="checkbox"]:checked::after { content: '✔'; color: #000; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 10px; }
+        .curve-control { gap: 3px; }
+        .curve-control input { width: 12px; height: 12px; }
+        .curve-control input:checked::after { font-size: 8px; }
+        .angle-input-wrapper { display: flex; align-items: center; border: 1px solid var(--panel-accent-color); border-radius: 6px; padding-left: 6px; }
+        .angle-input-wrapper input { border: none; padding: 6px 0; width: 35px; text-align: right; }
+        .degree-symbol { font-size: 14px; line-height: 1; padding-right: 4px; }
+        .color-container { display: flex; gap: 10px; align-items: center; width: 100%; }
+        .color-preview { width: 20px; height: 20px; border: 1px solid var(--panel-accent-color); border-radius: 4px; flex-shrink: 0; cursor: pointer; }
+        .color-sliders { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+        .speed-control-slider-container .min-value { min-width: 10px; text-align: right; }
+        .twist-controls { display: flex; justify-content: space-around; align-items: center; width: 100%; }
+        .direction-toggle-btn { background: transparent; border: 1px solid var(--panel-accent-color); border-radius: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+        .direction-toggle-btn:hover { background-color: var(--panel-accent-color-translucent); }
+        .direction-toggle-btn svg { width: 16px; height: 16px; fill: var(--panel-accent-color); }
+        .auto-control-wrapper { display: flex; justify-content: center; align-items: center; width: calc(100% - 21px); box-sizing: border-box; border: 1px solid var(--panel-accent-color); border-radius: 8px; padding: 8px 12px; font-size: 12px; gap: 10px; margin-left: 21px; }
+    </style>
+</head>
+<body>
+<div id="container">
+    <canvas id="sphere"></canvas>
+
+    <button id="open-panel-btn" data-tooltip="Open controls panel">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 6c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+    </button>
+
+    <div id="panel-wrapper" class="is-hidden">
+        <div id="panel">
+            <div class="collapsible-section">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Appearance</span>
+                </div>
+                <div class="section-content">
+                    <div class="row">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Adjust the size of individual dots">DotsSize</span>
+                            <div class="control">
+                                <div class="control-row">
+                                    <input id="dotSize" type="text" value="0.5">
+                                    <div class="inc-decr-stack">
+                                        <button class="btn small-btn" id="dotSize-incr">+</button>
+                                        <button class="btn small-btn" id="dotSize-decr">-</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Number of subdivisions (0-5)">Subdivisions</span>
+                            <div class="control">
+                                <div class="control-row">
+                                    <input id="subdivisions" type="text" value="3">
+                                    <div class="inc-decr-stack">
+                                        <button class="btn small-btn" id="subdivisions-incr">+</button>
+                                        <button class="btn small-btn" id="subdivisions-decr">-</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Total number of dots (read-only)">Ndots</span>
+                            <div class="control">
+                                <div class="control-row">
+                                    <input id="nDots" type="text" value="0" readonly style="background: rgba(0,255,255,0.1); width: 45px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="control-bordered-item">
+                        <span class="item-title checkbox-title" data-tooltip="Toggle visibility of connecting lines">
+                           <input type="checkbox" id="showLines" checked>
+                           Show Lines
+                       </span>
+                       <div class="row2" style="margin-top: 10px;">
+                           <div class="control-bordered-item">
+                               <span class="item-title" data-tooltip="Adjust line thickness">Width</span>
+                               <div class="control">
+                                   <div class="control-row" style="justify-content: center;">
+                                       <input id="lineWidth" type="text" value="0.5">
+                                       <div class="inc-decr-stack">
+                                           <button class="btn small-btn" id="lineWidth-incr">+</button>
+                                           <button class="btn small-btn" id="lineWidth-decr">-</button>
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="control-bordered-item">
+                               <span class="item-title checkbox-title" data-tooltip="Toggle curved lines">
+                                   <input type="checkbox" id="curveLines">
+                                   Curve
+                               </span>
+                               <div class="speed-control-slider-container">
+                                   <input id="lineCurveIntensity" type="range" min="-100" max="100" value="0">
+                                   <div class="slider-thumb-value">0</div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+
+                    <hr class="subsection-divider">
+
+                    <div class="row2">
+                        <div class="control-bordered-item">
+                            <span class="item-title">Twist</span>
+                            <div class="twist-controls">
+                                <label class="checkbox-title" data-tooltip="Enable/disable the twist effect">
+                                    <input type="checkbox" id="enableTwist">
+                                    On
+                                </label>
+                                <button id="twistDirBtn" class="direction-toggle-btn" data-tooltip="Toggle twist direction"></button>
+                            </div>
+                        </div>
+                         <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Adjust twist intensity">Twist Power</span>
+                            <div class="speed-control-slider-container">
+                                <input id="twistIntensity" type="range" min="0" max="200" value="50">
+                                <div class="slider-thumb-value">50</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="subsection-divider">
+
+                    <div class="row2">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Color for the northern hemisphere">Color 1 (N)</span>
+                            <div class="color-container">
+                                <div class="color-preview" id="color1-preview" style="background-color: var(--panel-accent-color);"></div>
+                                <input type="color" id="color1-picker" style="display: none;" value="#00ffff">
+                                <div class="color-sliders">
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">R</span>
+                                        <input id="color1R" type="range" min="0" max="255" value="0" step="1">
+                                        <div class="slider-thumb-value">0</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">G</span>
+                                        <input id="color1G" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">B</span>
+                                        <input id="color1B" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">A</span>
+                                        <input id="color1A" type="range" min="0" max="1" value="1" step="0.01">
+                                        <div class="slider-thumb-value">1</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Color for the southern hemisphere">Color 2 (S)</span>
+                            <div class="color-container">
+                                <div class="color-preview" id="color2-preview" style="background-color: var(--panel-accent-color);"></div>
+                                <input type="color" id="color2-picker" style="display: none;" value="#00ffff">
+                                <div class="color-sliders">
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">R</span>
+                                        <input id="color2R" type="range" min="0" max="255" value="0" step="1">
+                                        <div class="slider-thumb-value">0</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">G</span>
+                                        <input id="color2G" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">B</span>
+                                        <input id="color2B" type="range" min="0" max="255" value="255" step="1">
+                                        <div class="slider-thumb-value">255</div>
+                                    </div>
+                                    <div class="speed-control-slider-container">
+                                        <span class="min-value">A</span>
+                                        <input id="color2A" type="range" min="0" max="1" value="1" step="0.01">
+                                        <div class="slider-thumb-value">1</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+
+                    <div class="collapsible-section collapsed">
+                        <div class="section-header">
+                             <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                             <span class="section-title">Backgrounds</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="row2">
+                                <div class="control-bordered-item">
+                                    <span class="item-title">Body Background</span>
+                                    <div class="color-container" style="padding-top: 10px;">
+                                        <div class="color-preview" id="bgColor-preview" style="background-color: rgb(0,0,0);"></div>
+                                        <input type="color" id="bgColor-picker" style="display: none;" value="#000000">
+                                        <div class="color-sliders">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">R</span>
+                                                <input id="bgColorR" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">G</span>
+                                                <input id="bgColorG" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">B</span>
+                                                <input id="bgColorB" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">A</span>
+                                                <input id="bgColorA" type="range" min="0" max="1" value="1" step="0.01">
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="control-bordered-item">
+                                    <span class="item-title checkbox-title" data-tooltip="Enable/disable sphere background aura">
+                                        <input type="checkbox" id="sphereBgEnabled">
+                                        Sphere Aura
+                                    </span>
+                                    <div class="color-container" style="padding-top: 10px;">
+                                        <div class="color-preview" id="sphereBgColor-preview" style="background-color: rgba(0,255,255,0.5);"></div>
+                                        <input type="color" id="sphereBgColor-picker" style="display: none;" value="#00ffff">
+                                         <div class="color-sliders">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">R</span>
+                                                <input id="sphereBgColorR" type="range" min="0" max="255" value="0" step="1">
+                                                <div class="slider-thumb-value">0</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">G</span>
+                                                <input id="sphereBgColorG" type="range" min="0" max="255" value="255" step="1">
+                                                <div class="slider-thumb-value">255</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">B</span>
+                                                <input id="sphereBgColorB" type="range" min="0" max="255" value="255" step="1">
+                                                <div class="slider-thumb-value">255</div>
+                                            </div>
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">A</span>
+                                                <input id="sphereBgColorA" type="range" min="0" max="1" value="0.5" step="0.01">
+                                                <div class="slider-thumb-value">0.5</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item" style="width: 100%; margin-top: 10px; padding-top: 15px;">
+                                         <span class="item-title" data-tooltip="Spread of the central color in the gradient">Expansion</span>
+                                         <div class="speed-control-slider-container">
+                                            <input id="sphereBgSpread" type="range" min="0" max="100" value="10">
+                                            <div class="slider-thumb-value">10</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="collapsible-section collapsed">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Camera</span>
+                </div>
+                <div class="section-content">
+                    <div class="row" style="grid-template-columns: 1fr 1fr auto; align-items: center;">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Control the zoom level of the sphere">Zoom</span>
+                            <div class="control">
+                                <div class="speed-control-slider-container" id="zoomContainer">
+                                    <span class="min-value">1</span>
+                                    <input id="zoom" type="range" min="1" max="100" value="50">
+                                    <span class="max-value">100</span>
+                                    <div class="slider-thumb-value">50</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Adjust the overall size of the sphere on screen (%)">Size %</span>
+                            <div class="control">
+                                <div class="speed-control-slider-container" id="sizeContainer">
+                                    <span class="min-value">10</span>
+                                    <input id="size" type="range" min="10" max="100" value="100">
+                                    <span class="max-value">100</span>
+                                    <div class="slider-thumb-value">100</div>
+                                </div>
+                            </div>
+                        </div>
+                        <label class="checkbox-title" data-tooltip="Enable mouse drag and wheel zoom" style="font-size: 10px; padding-left: 5px;">
+                            <input type="checkbox" id="enableMouseDrag" checked>
+                            Mouse
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="collapsible-section collapsed">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Randomness</span>
+                </div>
+                <div class="section-content">
+                    <div class="row">
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Randomness in the latitude (vertical position) of dots">Rndm (θ)</span>
+                            <div class="control"><label for="latRandom"></label><input id="latRandom" type="range" min="0" max="100" value="0"></div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Randomness in the longitude (horizontal position) of dots">Rndm (φ)</span>
+                            <div class="control"><label for="lonRandom"></label><input id="lonRandom" type="range" min="0" max="100" value="0"></div>
+                        </div>
+                        <div class="control-bordered-item">
+                            <span class="item-title" data-tooltip="Randomness in the radius (distance from center) of dots">Rndm (α)</span>
+                            <div class="control"><label for="radRandom"></label><input id="radRandom" type="range" min="0" max="100" value="0"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <div id="animation-section" class="collapsible-section collapsed">
+                <div class="section-header">
+                    <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    <span class="section-title">Animation</span>
+                </div>
+                <div class="section-content">
+                    <div class="auto-control-wrapper">
+                        <span>Auto</span>
+                        <button id="auto-anim-toggle-btn" class="direction-toggle-btn"></button>
+                    </div>
+                    <div class="collapsible-section">
+                        <div class="section-header">
+                            <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                            <span class="section-title">Rotation</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="row3">
+                                <div class="giro-container">
+                                    <div class="giro-item">
+                                        <span class="item-title" data-tooltip="Rotation angle and speed for X-axis">Giro X</span>
+                                        <div class="control">
+                                            <select id="giroX" class="select-btn">
+                                                <option value="0">NO</option>
+                                                <option value="1" selected>→</option>
+                                                <option value="-1">←</option>
+                                            </select>
+                                        </div>
+                                        <div class="angle-display-control">
+                                            <div class="angle-input-wrapper">
+                                                <input id="giroXAngle" type="text" value="0.00">
+                                                <span class="degree-symbol">°</span>
+                                            </div>
+                                        </div>
+                                        <div class="speed-control-wrapper">
+                                            <div class="speed-control-slider-container" id="giroXSpeedContainer">
+                                                <span class="min-value">0</span>
+                                                <input id="giroXSpeed" type="range" min="0" max="100" value="6">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">6</div>
+                                            </div>
+                                        </div>
+                                        <div class="multiplier-control-group" data-tooltip="Multiplies the speed for X-axis (1-100)">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">1</span>
+                                                <input id="giroXMultiplier" type="range" min="1" max="100" value="1" step="1">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="giro-item">
+                                        <span class="item-title" data-tooltip="Rotation angle and speed for Y-axis">Giro Y</span>
+                                        <div class="control">
+                                            <select id="giroY" class="select-btn">
+                                                <option value="0">NO</option>
+                                                <option value="1" selected>→</option>
+                                                <option value="-1">←</option>
+                                            </select>
+                                        </div>
+                                        <div class="angle-display-control">
+                                            <div class="angle-input-wrapper">
+                                                <input id="giroYAngle" type="text" value="0.00">
+                                                <span class="degree-symbol">°</span>
+                                            </div>
+                                        </div>
+                                        <div class="speed-control-wrapper">
+                                            <div class="speed-control-slider-container" id="giroYSpeedContainer">
+                                                <span class="min-value">0</span>
+                                                <input id="giroYSpeed" type="range" min="0" max="100" value="8">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">8</div>
+                                            </div>
+                                        </div>
+                                        <div class="multiplier-control-group" data-tooltip="Multiplies the speed for Y-axis (1-100)">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">1</span>
+                                                <input id="giroYMultiplier" type="range" min="1" max="100" value="1" step="1">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="giro-item">
+                                        <span class="item-title" data-tooltip="Rotation angle and speed for Z-axis">Giro Z</span>
+                                        <div class="control">
+                                            <select id="giroZ" class="select-btn">
+                                                <option value="0">NO</option>
+                                                <option value="1">→</option>
+                                                <option value="-1" selected>←</option>
+                                            </select>
+                                        </div>
+                                        <div class="angle-display-control">
+                                            <div class="angle-input-wrapper">
+                                                <input id="giroZAngle" type="text" value="0.00">
+                                                <span class="degree-symbol">°</span>
+                                            </div>
+                                        </div>
+                                        <div class="speed-control-wrapper">
+                                            <div class="speed-control-slider-container" id="giroZSpeedContainer">
+                                                <span class="min-value">0</span>
+                                                <input id="giroZSpeed" type="range" min="0" max="100" value="20">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">20</div>
+                                            </div>
+                                        </div>
+                                        <div class="multiplier-control-group" data-tooltip="Multiplies the speed for Z-axis (1-100)">
+                                            <div class="speed-control-slider-container">
+                                                <span class="min-value">1</span>
+                                                <input id="giroZMultiplier" type="range" min="1" max="100" value="1" step="1">
+                                                <span class="max-value">100</span>
+                                                <div class="slider-thumb-value">1</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="collapsible-section collapsed">
+                        <div class="section-header">
+                            <svg class="arrow-icon" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                            <span class="section-title">Effects</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="control-bordered-item">
+                            <span class="item-title checkbox-title" data-tooltip="Enable/Disable the pulse effect">
+                                <input type="checkbox" id="enablePulse" checked>
+                                Pulse
+                            </span>
+                                <div class="row2" style="margin-top: 10px;">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Speed of the pulse animation">Speed</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="pulseSpeed" type="range" min="1" max="500" value="56">
+                                            <div class="slider-thumb-value">56</div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Amplitude of the size change">Radius</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="pulseRadius" type="range" min="0" max="100" step="1" value="27">
+                                            <div class="slider-thumb-value">27</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px; width: 100%;">
+                                    <select id="pulseType" class="select-btn" data-tooltip="Select the type of pulse animation" style="width: 100%;">
+                                        <option value="bounce">Bounce</option>
+                                        <option value="rebound">Rebound</option>
+                                        <option value="heartbeat">Heartbeat</option>
+                                        <option value="breathe">Breathe</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="control-bordered-item" style="margin-top: 10px;">
+                                <span class="item-title checkbox-title">
+                                    <input type="checkbox" id="morphicEffects">
+                                    Morph (Waves)
+                                </span>
+                                <div class="row2" style="margin-top: 10px; align-items: center;">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Number of wave emitters">Nº Waves</span>
+                                        <div class="control">
+                                            <div class="control-row">
+                                                <input id="waveCount" type="text" value="5">
+                                                <div class="inc-decr-stack">
+                                                    <button class="btn small-btn" id="waveCount-incr">+</button>
+                                                    <button class="btn small-btn" id="waveCount-decr">-</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Overall wave intensity">Intensity</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveIntensity" type="range" min="0" max="100" value="50">
+                                            <div class="slider-thumb-value">50</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row3" style="margin-top: 10px;">
+                                     <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Global wave speed multiplier">Speed</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveSpeed" type="range" min="0" max="100" value="50">
+                                            <div class="slider-thumb-value">50</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row2" style="margin-top: 10px;">
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Global wave amplitude multiplier">Amplitude</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveAmplitude" type="range" min="0" max="100" value="50">
+                                            <div class="slider-thumb-value">50</div>
+                                        </div>
+                                    </div>
+                                    <div class="control-bordered-item">
+                                        <span class="item-title" data-tooltip="Wave frequency (tightness)">Frequency</span>
+                                        <div class="speed-control-slider-container">
+                                            <input id="waveFrequency" type="range" min="1" max="50" value="10">
+                                            <div class="slider-thumb-value">10</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button id="close-panel-btn" data-tooltip="Close controls panel">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+        </button>
+        <div id="panel-resize-handle" data-tooltip="Drag to resize panel"></div>
+    </div>
+</div>
+<script>
+    // DEVELOPMENT MODE FLAG
+    const dev_mode = false;
+
+    // --- Main Thread ---
+    const canvas = document.getElementById('sphere');
+    const ctx = canvas.getContext('2d');
+    let w, h, R;
+    let animationFrameId = null;
+
+    // --- State & Parameters ---
+    const params = {
+        zoom: 48, dotSize: 0.5, subdivisions: 3, size: 100,
+        rotX: 1, rotY: 1, rotZ: -1,
+        speedX: 16, speedY: 48, speedZ: 20,
+        speedMultiplierX: 1, speedMultiplierY: 1, speedMultiplierZ: 1,
+        latRandom: 0, lonRandom: 0, radRandom: 0,
+        showLines: true, lineWidth: 0.5, curveLines: false, lineCurveIntensity: 0,
+        enableTwist: false, twistIntensity: 50, twistDir: 1,
+        enableMouseDrag: true,
+        enablePulse: true, pulseSpeed: 150, pulseRadius: 4, pulseType: 'bounce',
+        morphicEffects: false, waveIntensity: 50, waveCount: 5, waveSpeed: 50, waveAmplitude: 50, waveFrequency: 10,
+        isAnimationPaused: false,
+        color1: { r: 0, g: 213, b: 255, a: 1 },
+        color2: { r: 0, g: 213, b: 255, a: 1 },
+    };
+    const styleParams = {
+        bgColor: { r: 0, g: 0, b: 0, a: 0 },
+        sphereBgEnabled: false,
+        sphereBgColor: { r: 0, g: 255, b: 255, a: 0.5 },
+        sphereBgSpread: 10,
+    };
+
+    let angleX = 0, angleY = 0, angleZ = 0;
+    let pulsePhase = 0;
+    let lastFrameTime = performance.now();
+    let isDragging = false;
+    let lastMouseX, lastMouseY;
+    let autoRotationState = {};
+    let currentIcoFaces = null; // Holds the geometry faces
+
+    // --- Worker Initialization ---
+    const workerCode = `
+        /**
+         * sphere-calculator.js
+         * Web Worker for Sphere v5.76 - Optimization
+         * Handles all heavy computations off the main UI thread.
+         */
+
+        // --- State Variables ---
+        let basePts = null; // Will be a Float32Array: [thetaG1, phiG1, thetaR1, phiR1, ...]
+        let randR = null;   // Float32Array for radius randomness
+        let icoFaces = null; // Uint32Array for icosphere faces
+        let waveEffects = []; // Array of objects for morph waves
+
+        let actualMinThetaG, actualMaxThetaG, actualThetaRange;
+
+        // --- Helper Functions (self-contained in worker) ---
+        function cartesianToSpherical(x, y, z) {
+            return { theta: Math.asin(z), phi: Math.atan2(y, x) };
+        }
+
+        function getMidpoint(v1, v2) {
+            const mid = [ (v1[0] + v2[0]) / 2, (v1[1] + v2[1]) / 2, (v1[2] + v2[2]) / 2 ];
+            const length = Math.sqrt(mid[0]**2 + mid[1]**2 + mid[2]**2);
+            return [mid[0] / length, mid[1] / length, mid[2] / length];
+        }
+
+        // --- Core Logic ---
+
+        function generateIcosphere(subdivisions) {
+            const phi = (1 + Math.sqrt(5)) / 2;
+            const norm = Math.sqrt(1 + phi**2);
+            let vertices = [
+                [-1/norm, phi/norm, 0], [1/norm, phi/norm, 0], [-1/norm, -phi/norm, 0], [1/norm, -phi/norm, 0],
+                [0, -1/norm, phi/norm], [0, 1/norm, phi/norm], [0, -1/norm, -phi/norm], [0, 1/norm, -phi/norm],
+                [phi/norm, 0, -1/norm], [phi/norm, 0, 1/norm], [-phi/norm, 0, -1/norm], [-phi/norm, 0, 1/norm]
+            ];
+            let faces = [
+                [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2],
+                [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5],
+                [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+            ];
+
+            for (let i = 0; i < subdivisions; i++) {
+                const newFaces = [];
+                const midpointCache = new Map();
+                const getOrCreateMidpoint = (i1, i2) => {
+                    const key = i1 < i2 ? \`\${i1},\${i2}\` : \`\${i2},\${i1}\`;
+                    if (midpointCache.has(key)) return midpointCache.get(key);
+                    const midpoint = getMidpoint(vertices[i1], vertices[i2]);
+                    const index = vertices.length;
+                    vertices.push(midpoint);
+                    midpointCache.set(key, index);
+                    return index;
+                };
+                for (const face of faces) {
+                    const [v1, v2, v3] = face;
+                    const a = getOrCreateMidpoint(v1, v2);
+                    const b = getOrCreateMidpoint(v2, v3);
+                    const c = getOrCreateMidpoint(v3, v1);
+                    newFaces.push([v1, a, c], [v2, b, a], [v3, c, b], [a, b, c]);
+                }
+                faces = newFaces;
+            }
+            return { vertices, faces };
+        }
+
+
+        function initBasePts(params) {
+            const icosphere = generateIcosphere(params.subdivisions);
+            const numPts = icosphere.vertices.length;
+
+            // Use TypedArrays for efficiency
+            basePts = new Float32Array(numPts * 4); // 4 values per point: thetaG, phiG, thetaR, phiR
+            randR = new Float32Array(numPts);
+            icoFaces = new Uint32Array(icosphere.faces.flat());
+
+            let tempMinTheta = Infinity, tempMaxTheta = -Infinity;
+
+            icosphere.vertices.forEach((v, i) => {
+                const spherical = cartesianToSpherical(v[0], v[1], v[2]);
+                if (spherical.theta < tempMinTheta) tempMinTheta = spherical.theta;
+                if (spherical.theta > tempMaxTheta) tempMaxTheta = spherical.theta;
+
+                const baseIndex = i * 4;
+                basePts[baseIndex] = spherical.theta;
+                basePts[baseIndex + 1] = spherical.phi;
+                basePts[baseIndex + 2] = Math.acos(2 * Math.random() - 1) - Math.PI / 2;
+                basePts[baseIndex + 3] = 2 * Math.PI * Math.random();
+                randR[i] = Math.random();
+            });
+
+            actualMinThetaG = tempMinTheta;
+            actualMaxThetaG = tempMaxTheta;
+            actualThetaRange = actualMaxThetaG - actualMinThetaG;
+
+            if (params.enableTwist) {
+                applyTwist(params.twistIntensity, params.twistDir);
+            }
+        }
+
+        function applyTwist(intensity, direction) {
+            const maxTwistAngle = (intensity / 100) * (2 * Math.PI);
+            for (let i = 0; i < basePts.length / 4; i++) {
+                const baseIndex = i * 4;
+                const thetaG = basePts[baseIndex];
+                const normalizedLatitude = thetaG / (Math.PI / 2);
+                const twistAngle = normalizedLatitude * maxTwistAngle * direction;
+                basePts[baseIndex + 1] += twistAngle; // Modify phiG
+            }
+        }
+
+        function initWaveEffects(params) {
+            waveEffects = [];
+            for (let i = 0; i < params.waveCount; i++) {
+                waveEffects.push({
+                    x: Math.random() * 2 - 1,
+                    y: Math.random() * 2 - 1,
+                    z: Math.random() * 2 - 1,
+                    phase: Math.random() * Math.PI * 2,
+                    speed: 0.02 + Math.random() * 0.03,
+                    amplitude: 0.1 + Math.random() * 0.2
+                });
+            }
+        }
+
+        // --- Main Calculation Function ---
+        function calculateFrame(params) {
+            if (!basePts) return;
+
+            const numPts = basePts.length / 4;
+            // 4 values per point: x, y, depth, originalTheta
+            const transformedPtsBuffer = new Float32Array(numPts * 4);
+
+            const cosX = Math.cos(params.angleX), sinX = Math.sin(params.angleX);
+            const cosY = Math.cos(params.angleY), sinY = Math.sin(params.angleY);
+            const cosZ = Math.cos(params.angleZ), sinZ = Math.sin(params.angleZ);
+
+            for (let i = 0; i < numPts; i++) {
+                const baseIndex = i * 4;
+                const p_thetaG = basePts[baseIndex];
+                const p_phiG = basePts[baseIndex + 1];
+                const p_thetaR = basePts[baseIndex + 2];
+                const p_phiR = basePts[baseIndex + 3];
+
+                const theta = p_thetaG * (1 - params.latRandom / 100) + p_thetaR * (params.latRandom / 100);
+                const phi = p_phiG * (1 - params.lonRandom / 100) + p_phiR * (params.lonRandom / 100);
+
+                let x = Math.cos(theta) * Math.cos(phi);
+                let y = Math.cos(theta) * Math.sin(phi);
+                let z = Math.sin(theta);
+
+                if (params.morphicEffects) {
+                    let waveDisplacement = 0;
+                    waveEffects.forEach(wave => {
+                        const dist = Math.sqrt((x-wave.x)**2 + (y-wave.y)**2 + (z-wave.z)**2);
+                        waveDisplacement += Math.sin(wave.phase - dist * params.waveFrequency) * (wave.amplitude * (params.waveAmplitude / 50)) * (params.waveIntensity / 100);
+                    });
+                    const factor = 1 + waveDisplacement;
+                    x *= factor; y *= factor; z *= factor;
+                }
+
+                const randomRadiusFactor = 1 - (params.radRandom / 100) * randR[i];
+                x *= randomRadiusFactor; y *= randomRadiusFactor; z *= randomRadiusFactor;
+
+                // Rotations
+                let tempX, tempY, tempZ;
+                tempX = x * cosZ - y * sinZ;
+                tempY = x * sinZ + y * cosZ;
+                x = tempX; y = tempY;
+
+                tempX = x * cosY + z * sinY;
+                tempZ = -x * sinY + z * cosY;
+                x = tempX; z = tempZ;
+
+                tempY = y * sinX + z * cosX;
+                tempZ = y * cosX - z * sinX;
+                y = tempY; z = tempZ;
+
+                const transformedIndex = i * 4;
+                transformedPtsBuffer[transformedIndex] = x;
+                transformedPtsBuffer[transformedIndex + 1] = y;
+                transformedPtsBuffer[transformedIndex + 2] = (z + 1) / 2; // depth
+                transformedPtsBuffer[transformedIndex + 3] = p_thetaG; // originalTheta
+            }
+            
+            // Post the result back to the main thread
+            self.postMessage({
+                type: 'frame',
+                buffer: transformedPtsBuffer.buffer,
+                minTheta: actualMinThetaG,
+                thetaRange: actualThetaRange
+            }, [transformedPtsBuffer.buffer]);
+        }
+
+
+        // --- Worker Event Listener ---
+        self.onmessage = function(e) {
+            const { type, params } = e.data;
+
+            switch (type) {
+                case 'init':
+                    initBasePts(params);
+                    initWaveEffects(params);
+                    self.postMessage({
+                        type: 'initialized',
+                        nDots: basePts.length / 4,
+                        icoFaces: icoFaces.buffer
+                    }, [icoFaces.buffer]);
+                    break;
+                case 'rebuild':
+                    initBasePts(params);
+                    initWaveEffects(params);
+                    self.postMessage({
+                        type: 'rebuilt',
+                        nDots: basePts.length / 4,
+                        icoFaces: icoFaces.buffer
+                    }, [icoFaces.buffer]);
+                    break;
+                case 'update':
+                    if (params.morphicEffects) {
+                        waveEffects.forEach(wave => wave.phase += wave.speed * params.deltaTime * 0.1 * (params.waveSpeed / 50));
+                    }
+                    calculateFrame(params);
+                    break;
+            }
+        };
+    `;
+    const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+    const workerURL = URL.createObjectURL(workerBlob);
+    const worker = new Worker(workerURL);
+    let workerInitialized = false;
+
+    worker.onmessage = function(e) {
+        const { type, nDots, buffer, icoFaces, minTheta, thetaRange } = e.data;
+        if (type === 'initialized' || type === 'rebuilt') {
+            workerInitialized = true;
+            nDotsInput.value = nDots;
+            currentIcoFaces = new Uint32Array(icoFaces);
+            if (type === 'initialized') {
+                requestAnimationFrame(t => {
+                    lastFrameTime = t;
+                    draw(t);
+                });
+            }
+        } else if (type === 'frame') {
+            renderFrame(buffer, minTheta, thetaRange);
+        }
+    };
+
+    // --- Element References ---
+    const giroXAngleInput = document.getElementById('giroXAngle');
+    const giroYAngleInput = document.getElementById('giroYAngle');
+    const giroZAngleInput = document.getElementById('giroZAngle');
+    const nDotsInput = document.getElementById('nDots');
+    const subdivisionsInput = document.getElementById('subdivisions');
+    const zoomInput = document.getElementById('zoom');
+    const sizeInput = document.getElementById('size');
+    const enableMouseDragInput = document.getElementById('enableMouseDrag');
+    const autoAnimToggleBtn = document.getElementById('auto-anim-toggle-btn');
+    const twistDirBtn = document.getElementById('twistDirBtn');
+    const panelWrapper = document.getElementById('panel-wrapper');
+    const openBtn = document.getElementById('open-panel-btn');
+    const closeBtn = document.getElementById('close-panel-btn');
+    
+    // --- Helper Functions ---
+    function toDegrees(radians) { return radians * (180 / Math.PI); }
+    function toRadians(degrees) { return degrees * (Math.PI / 180); }
+    function normalizeAngle(angle) { return angle % (2 * Math.PI); }
+    function lerpColor(c1, c2, f) {
+        return `rgba(${Math.round(c1.r + (c2.r - c1.r) * f)}, ${Math.round(c1.g + (c2.g - c1.g) * f)}, ${Math.round(c1.b + (c2.b - c1.b) * f)}, ${parseFloat((c1.a + (c2.a - c1.a) * f).toFixed(2))})`;
+    }
+
+    // --- Main Draw & Render Logic ---
+    function draw(now) {
+        if (params.isAnimationPaused || !workerInitialized) {
+            animationFrameId = requestAnimationFrame(draw);
+            return;
+        }
+
+        const deltaTime = now - lastFrameTime;
+        lastFrameTime = now;
+
+        if (params.enablePulse) {
+            pulsePhase += (deltaTime * 0.001) * (params.pulseSpeed / 50.0);
+        }
+
+        if (!isDragging) {
+            const speedX = params.rotX * (params.speedX / 100) * 0.005 * params.speedMultiplierX;
+            const speedY = params.rotY * (params.speedY / 100) * 0.005 * params.speedMultiplierY;
+            const speedZ = params.rotZ * (params.speedZ / 100) * 0.005 * params.speedMultiplierZ;
+            angleX = normalizeAngle(angleX + speedX * deltaTime * 0.1);
+            angleY = normalizeAngle(angleY + speedY * deltaTime * 0.1);
+            angleZ = normalizeAngle(angleZ + speedZ * deltaTime * 0.1);
+        }
+
+        // Update UI displays (throttled)
+        if (document.activeElement !== giroXAngleInput) giroXAngleInput.value = toDegrees(angleX).toFixed(2);
+        if (document.activeElement !== giroYAngleInput) giroYAngleInput.value = toDegrees(angleY).toFixed(2);
+        if (document.activeElement !== giroZAngleInput) giroZAngleInput.value = toDegrees(angleZ).toFixed(2);
+
+        // Send data to worker
+        worker.postMessage({
+            type: 'update',
+            params: { ...params, angleX, angleY, angleZ, pulsePhase, deltaTime }
+        });
+
+        animationFrameId = requestAnimationFrame(draw);
+    }
+
+    function renderFrame(buffer, minTheta, thetaRange) {
+        if (!currentIcoFaces) return;
+
+        const transformedPts = new Float32Array(buffer);
+        const numPts = transformedPts.length / 4;
+
+        const maxRadius = (Math.min(w, h) / 2) - 5;
+        let baseRadius = maxRadius * (params.size / 100);
+
+        if (params.enablePulse) {
+            let pulseOffset = 0;
+            switch(params.pulseType) {
+                case 'bounce': pulseOffset = baseRadius * (params.pulseRadius / 100) * Math.sin(pulsePhase); break;
+                case 'rebound': pulseOffset = baseRadius * (params.pulseRadius / 100) * Math.abs(Math.sin(pulsePhase)); break;
+                // Heartbeat and Breathe logic would need more state from worker or reimplementation here
+                // For simplicity, we'll keep it basic for now.
+            }
+            R = baseRadius + pulseOffset;
+        } else {
+            R = baseRadius;
+        }
+
+        ctx.clearRect(0, 0, w, h);
+        const centerX = w / 2, centerY = h / 2;
+        
+        if (styleParams.sphereBgEnabled) {
+            const { r, g, b, a } = styleParams.sphereBgColor;
+            const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, R * (params.zoom / 50));
+            const spread = Math.min(1, styleParams.sphereBgSpread / 100);
+            gradient.addColorStop(0, `rgba(${r},${g},${b},${a})`);
+            gradient.addColorStop(spread, `rgba(${r},${g},${b},${a})`);
+            gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(params.zoom / 50, params.zoom / 50);
+        ctx.translate(-centerX, -centerY);
+
+        // --- Draw Lines ---
+        if (params.showLines && currentIcoFaces.length > 0) {
+            ctx.lineWidth = params.lineWidth;
+            
+            const drawSegment = (p1x, p1y, p2x, p2y) => {
+                if (params.curveLines) {
+                    const dist = Math.hypot(p2x - p1x, p2y - p1y);
+                    const midX = (p1x + p2x) / 2;
+                    const midY = (p1y + p2y) / 2;
+                    const curve = dist * (params.lineCurveIntensity / 100) * 0.8;
+                    const nx = -(p2y - p1y) / dist;
+                    const ny = (p1x - p2x) / dist;
+                    ctx.quadraticCurveTo(midX + nx * curve, midY - ny * curve, p2x, p2y);
+                } else {
+                    ctx.lineTo(p2x, p2y);
+                }
+            };
+            
+            for (let i = 0; i < currentIcoFaces.length; i += 3) {
+                const p1Idx = currentIcoFaces[i] * 4;
+                const p2Idx = currentIcoFaces[i+1] * 4;
+                const p3Idx = currentIcoFaces[i+2] * 4;
+
+                const p1x = centerX + transformedPts[p1Idx] * R;
+                const p1y = centerY + transformedPts[p1Idx + 1] * R;
+                const p2x = centerX + transformedPts[p2Idx] * R;
+                const p2y = centerY + transformedPts[p2Idx + 1] * R;
+                const p3x = centerX + transformedPts[p3Idx] * R;
+                const p3y = centerY + transformedPts[p3Idx + 1] * R;
+
+                const p1d = transformedPts[p1Idx + 2];
+                const p2d = transformedPts[p2Idx + 2];
+                const p3d = transformedPts[p3Idx + 2];
+                
+                const p1t = transformedPts[p1Idx + 3];
+                const p2t = transformedPts[p2Idx + 3];
+                const p3t = transformedPts[p3Idx + 3];
+
+                const avgDepth = (p1d + p2d + p3d) / 3;
+                ctx.globalAlpha = 0.1 + avgDepth * 0.4;
+                const avgTheta = (p1t + p2t + p3t) / 3;
+                ctx.strokeStyle = lerpColor(params.color2, params.color1, Math.max(0, Math.min(1, (avgTheta - minTheta) / thetaRange)));
+                
+                ctx.beginPath();
+                ctx.moveTo(p1x, p1y);
+                drawSegment(p1x, p1y, p2x, p2y);
+                drawSegment(p2x, p2y, p3x, p3y);
+                drawSegment(p3x, p3y, p1x, p1y);
+                ctx.stroke();
+            }
+        }
+
+        // --- Draw Dots ---
+        for (let i = 0; i < numPts; i++) {
+            const baseIndex = i * 4;
+            const x = transformedPts[baseIndex];
+            const y = transformedPts[baseIndex + 1];
+            const depth = transformedPts[baseIndex + 2];
+            const originalTheta = transformedPts[baseIndex + 3];
+
+            const pointSize = params.dotSize + depth * params.dotSize;
+            if (pointSize > 0) {
+                ctx.globalAlpha = 0.2 + depth * 0.8;
+                ctx.fillStyle = lerpColor(params.color2, params.color1, Math.max(0, Math.min(1, (originalTheta - minTheta) / thetaRange)));
+                ctx.beginPath();
+                ctx.arc(centerX + x * R, centerY + y * R, pointSize, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    // --- UI Event Listeners & Initialization ---
+    function initialize() {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        window.addEventListener('resize', () => {
+             w = window.innerWidth;
+             h = window.innerHeight;
+             canvas.width = w;
+             canvas.height = h;
+        });
+
+        worker.postMessage({ type: 'init', params });
+
+        // --- Setup all UI event listeners ---
+        const dotSizeInput = document.getElementById('dotSize');
+        dotSizeInput.addEventListener('input', e => params.dotSize = +e.target.value);
+        document.getElementById('dotSize-incr').addEventListener('click', () => {
+            params.dotSize = parseFloat((params.dotSize + 0.1).toFixed(2));
+            dotSizeInput.value = params.dotSize.toFixed(1);
+        });
+        document.getElementById('dotSize-decr').addEventListener('click', () => {
+            params.dotSize = parseFloat(Math.max(0.0, params.dotSize - 0.1).toFixed(2));
+            dotSizeInput.value = params.dotSize.toFixed(1);
+        });
+
+        subdivisionsInput.addEventListener('input', () => {
+            params.subdivisions = Math.max(0, Math.min(5, +subdivisionsInput.value));
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        document.getElementById('subdivisions-incr').addEventListener('click', () => {
+            params.subdivisions = Math.min(5, params.subdivisions + 1);
+            subdivisionsInput.value = params.subdivisions;
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        document.getElementById('subdivisions-decr').addEventListener('click', () => {
+            params.subdivisions = Math.max(0, params.subdivisions - 1);
+            subdivisionsInput.value = params.subdivisions;
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        
+        document.getElementById('enableTwist').addEventListener('change', e => {
+            params.enableTwist = e.target.checked;
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        document.getElementById('twistIntensity').addEventListener('input', e => {
+            params.twistIntensity = +e.target.value;
+            if(params.enableTwist) worker.postMessage({ type: 'rebuild', params });
+        });
+        twistDirBtn.addEventListener('click', () => {
+            params.twistDir *= -1;
+            updateTwistDirectionUI();
+            if(params.enableTwist) worker.postMessage({ type: 'rebuild', params });
+        });
+
+        const lineWidthInput = document.getElementById('lineWidth');
+        lineWidthInput.addEventListener('input', e => params.lineWidth = +e.target.value);
+        document.getElementById('lineWidth-incr').addEventListener('click', () => {
+            params.lineWidth = parseFloat((params.lineWidth + 0.1).toFixed(2));
+            lineWidthInput.value = params.lineWidth.toFixed(1);
+        });
+        document.getElementById('lineWidth-decr').addEventListener('click', () => {
+            params.lineWidth = parseFloat(Math.max(0.1, params.lineWidth - 0.1).toFixed(2));
+            lineWidthInput.value = params.lineWidth.toFixed(1);
+        });
+
+        document.getElementById('showLines').addEventListener('change', e => params.showLines = e.target.checked);
+        document.getElementById('curveLines').addEventListener('change', e => params.curveLines = e.target.checked);
+        document.getElementById('lineCurveIntensity').addEventListener('input', e => params.lineCurveIntensity = +e.target.value);
+        
+        document.getElementById('latRandom').addEventListener('input', e => params.latRandom = +e.target.value);
+        document.getElementById('lonRandom').addEventListener('input', e => params.lonRandom = +e.target.value);
+        document.getElementById('radRandom').addEventListener('input', e => params.radRandom = +e.target.value);
+        
+        document.getElementById('giroX').addEventListener('change', e => params.rotX = +e.target.value);
+        document.getElementById('giroY').addEventListener('change', e => params.rotY = +e.target.value);
+        document.getElementById('giroZ').addEventListener('change', e => params.rotZ = +e.target.value);
+        
+        document.getElementById('giroXSpeed').addEventListener('input', e => params.speedX = +e.target.value);
+        document.getElementById('giroYSpeed').addEventListener('input', e => params.speedY = +e.target.value);
+        document.getElementById('giroZSpeed').addEventListener('input', e => params.speedZ = +e.target.value);
+        
+        document.getElementById('giroXMultiplier').addEventListener('input', e => params.speedMultiplierX = +e.target.value);
+        document.getElementById('giroYMultiplier').addEventListener('input', e => params.speedMultiplierY = +e.target.value);
+        document.getElementById('giroZMultiplier').addEventListener('input', e => params.speedMultiplierZ = +e.target.value);
+        
+        document.getElementById('enablePulse').addEventListener('change', e => params.enablePulse = e.target.checked);
+        document.getElementById('pulseSpeed').addEventListener('input', e => params.pulseSpeed = +e.target.value);
+        document.getElementById('pulseRadius').addEventListener('input', e => params.pulseRadius = +e.target.value);
+        document.getElementById('pulseType').addEventListener('change', e => params.pulseType = e.target.value);
+        
+        document.getElementById('morphicEffects').addEventListener('change', e => params.morphicEffects = e.target.checked);
+        const waveCountInput = document.getElementById('waveCount');
+        waveCountInput.addEventListener('input', e => {
+            params.waveCount = +e.target.value;
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        document.getElementById('waveCount-incr').addEventListener('click', () => {
+            params.waveCount = Math.min(20, params.waveCount + 1);
+            waveCountInput.value = params.waveCount;
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        document.getElementById('waveCount-decr').addEventListener('click', () => {
+            params.waveCount = Math.max(1, params.waveCount - 1);
+            waveCountInput.value = params.waveCount;
+            worker.postMessage({ type: 'rebuild', params });
+        });
+        document.getElementById('waveIntensity').addEventListener('input', e => params.waveIntensity = +e.target.value);
+        document.getElementById('waveSpeed').addEventListener('input', e => params.waveSpeed = +e.target.value);
+        document.getElementById('waveAmplitude').addEventListener('input', e => params.waveAmplitude = +e.target.value);
+        document.getElementById('waveFrequency').addEventListener('input', e => params.waveFrequency = +e.target.value);
+        
+        zoomInput.addEventListener('input', e => params.zoom = +e.target.value);
+        sizeInput.addEventListener('input', e => params.size = +e.target.value);
+        
+        enableMouseDragInput.addEventListener('change', e => params.enableMouseDrag = e.target.checked);
+        canvas.addEventListener('mousedown', e => {
+            if (!params.enableMouseDrag) return;
+            isDragging = true;
+            canvas.style.cursor = 'grabbing';
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            autoRotationState = { rotX: params.rotX, rotY: params.rotY, rotZ: params.rotZ };
+            params.rotX = 0; params.rotY = 0; params.rotZ = 0;
+        });
+        window.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+            Object.assign(params, autoRotationState);
+        });
+        window.addEventListener('mousemove', e => {
+            if (isDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                angleY += deltaX * 0.005;
+                angleX += deltaY * 0.005;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+        
+        autoAnimToggleBtn.addEventListener('click', () => {
+            params.isAnimationPaused = !params.isAnimationPaused;
+            updatePlayPauseUI();
+        });
+
+        // --- Panel Toggle Logic ---
+        openBtn.addEventListener('click', () => {
+            panelWrapper.classList.remove('is-hidden');
+            openBtn.classList.remove('is-visible');
+        });
+
+        closeBtn.addEventListener('click', () => {
+            panelWrapper.classList.add('is-hidden');
+            openBtn.classList.add('is-visible');
+        });
+
+        if (dev_mode) {
+            panelWrapper.classList.remove('is-hidden');
+        } else {
+            panelWrapper.classList.add('is-hidden');
+            openBtn.classList.add('is-visible');
+        }
+
+        // --- Color Controls ---
+        const color1R = document.getElementById('color1R'), color1G = document.getElementById('color1G'), color1B = document.getElementById('color1B'), color1A = document.getElementById('color1A');
+        const color2R = document.getElementById('color2R'), color2G = document.getElementById('color2G'), color2B = document.getElementById('color2B'), color2A = document.getElementById('color2A');
+        const color1Picker = document.getElementById('color1-picker'), color2Picker = document.getElementById('color2-picker');
+        const color1Preview = document.getElementById('color1-preview'), color2Preview = document.getElementById('color2-preview');
+
+        function updateColorUI(colorNum) {
+            const color = params['color' + colorNum];
+            const preview = document.getElementById('color' + colorNum + '-preview');
+            const rInput = document.getElementById('color' + colorNum + 'R');
+            const gInput = document.getElementById('color' + colorNum + 'G');
+            const bInput = document.getElementById('color' + colorNum + 'B');
+            const aInput = document.getElementById('color' + colorNum + 'A');
+
+            preview.style.backgroundColor = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
+            rInput.value = color.r;
+            gInput.value = color.g;
+            bInput.value = color.b;
+            aInput.value = color.a;
+        }
+
+        function hexToRgba(hex, alpha = 1) {
+            let r = parseInt(hex.substring(1, 3), 16);
+            let g = parseInt(hex.substring(3, 5), 16);
+            let b = parseInt(hex.substring(5, 7), 16);
+            return { r, g, b, a: alpha };
+        }
+
+        color1R.addEventListener('input', e => { params.color1.r = +e.target.value; updateColorUI(1); });
+        color1G.addEventListener('input', e => { params.color1.g = +e.target.value; updateColorUI(1); });
+        color1B.addEventListener('input', e => { params.color1.b = +e.target.value; updateColorUI(1); });
+        color1A.addEventListener('input', e => { params.color1.a = +e.target.value; updateColorUI(1); });
+        color2R.addEventListener('input', e => { params.color2.r = +e.target.value; updateColorUI(2); });
+        color2G.addEventListener('input', e => { params.color2.g = +e.target.value; updateColorUI(2); });
+        color2B.addEventListener('input', e => { params.color2.b = +e.target.value; updateColorUI(2); });
+        color2A.addEventListener('input', e => { params.color2.a = +e.target.value; updateColorUI(2); });
+        
+        color1Preview.addEventListener('click', () => color1Picker.click());
+        color2Preview.addEventListener('click', () => color2Picker.click());
+
+        color1Picker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, params.color1.a);
+            params.color1 = rgba;
+            updateColorUI(1);
+        });
+
+        color2Picker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, params.color2.a);
+            params.color2 = rgba;
+            updateColorUI(2);
+        });
+        
+        // --- Background Controls ---
+        const bgColorR = document.getElementById('bgColorR'), bgColorG = document.getElementById('bgColorG'), bgColorB = document.getElementById('bgColorB'), bgColorA = document.getElementById('bgColorA');
+        const sphereBgColorR = document.getElementById('sphereBgColorR'), sphereBgColorG = document.getElementById('sphereBgColorG'), sphereBgColorB = document.getElementById('sphereBgColorB'), sphereBgColorA = document.getElementById('sphereBgColorA');
+        const bgColorPicker = document.getElementById('bgColor-picker'), sphereBgColorPicker = document.getElementById('sphereBgColor-picker');
+        const bgColorPreview = document.getElementById('bgColor-preview'), sphereBgColorPreview = document.getElementById('sphereBgColor-preview');
+        const sphereBgEnabled = document.getElementById('sphereBgEnabled'), sphereBgSpread = document.getElementById('sphereBgSpread');
+
+        function applyStyleParams() {
+            const { r, g, b, a } = styleParams.bgColor;
+            document.body.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+            bgColorPreview.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+            const sbg = styleParams.sphereBgColor;
+            sphereBgColorPreview.style.backgroundColor = `rgba(${sbg.r}, ${sbg.g}, ${sbg.b}, ${sbg.a})`;
+        }
+
+        bgColorR.addEventListener('input', e => { styleParams.bgColor.r = +e.target.value; applyStyleParams(); });
+        bgColorG.addEventListener('input', e => { styleParams.bgColor.g = +e.target.value; applyStyleParams(); });
+        bgColorB.addEventListener('input', e => { styleParams.bgColor.b = +e.target.value; applyStyleParams(); });
+        bgColorA.addEventListener('input', e => { styleParams.bgColor.a = +e.target.value; applyStyleParams(); });
+        sphereBgColorR.addEventListener('input', e => { styleParams.sphereBgColor.r = +e.target.value; applyStyleParams(); });
+        sphereBgColorG.addEventListener('input', e => { styleParams.sphereBgColor.g = +e.target.value; applyStyleParams(); });
+        sphereBgColorB.addEventListener('input', e => { styleParams.sphereBgColor.b = +e.target.value; applyStyleParams(); });
+        sphereBgColorA.addEventListener('input', e => { styleParams.sphereBgColor.a = +e.target.value; applyStyleParams(); });
+        sphereBgEnabled.addEventListener('change', e => styleParams.sphereBgEnabled = e.target.checked);
+        sphereBgSpread.addEventListener('input', e => styleParams.sphereBgSpread = +e.target.value);
+        bgColorPreview.addEventListener('click', () => bgColorPicker.click());
+        sphereBgColorPreview.addEventListener('click', () => sphereBgColorPicker.click());
+        bgColorPicker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, styleParams.bgColor.a);
+            styleParams.bgColor = rgba;
+            applyStyleParams();
+        });
+        sphereBgColorPicker.addEventListener('input', (e) => {
+            const rgba = hexToRgba(e.target.value, styleParams.sphereBgColor.a);
+            styleParams.sphereBgColor = rgba;
+            applyStyleParams();
+        });
+
+        // --- Collapsible sections ---
+        document.querySelectorAll('.section-header').forEach(header => {
+            header.addEventListener('click', () => {
+                header.parentElement.classList.toggle('collapsed');
+            });
+        });
+
+        updatePlayPauseUI();
+        updateTwistDirectionUI();
+        applyStyleParams();
+    }
+    
+    function updateTwistDirectionUI() {
+        twistDirBtn.innerHTML = params.twistDir === 1 ? '<svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>';
+    }
+    function updatePlayPauseUI() {
+        const isPlaying = !params.isAnimationPaused;
+        autoAnimToggleBtn.innerHTML = isPlaying ? '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        autoAnimToggleBtn.dataset.tooltip = isPlaying ? "Pause Animation" : "Play Animation";
+    }
+
+    initialize();
+</script>
+</body>
+</html>

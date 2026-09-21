@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anillo Mórfico Animado</title>
+    <style>
+        /* * CSS: Estilos para el escenario y el anillo.
+         */
+
+        /* Preparamos el escenario: fondo oscuro y centrado total del contenido. */
+        body {
+            display: grid;
+            place-content: center;
+            min-height: 100vh;
+            background-color: #050505;
+            margin: 0;
+            overflow: hidden; /* Evita barras de scroll por el efecto de borde */
+        }
+
+        /* Creamos la forma base y el brillo de neón del anillo. */
+        .morphic-ring {
+            width: 300px;
+            height: 300px;
+            
+            /* Damos la forma circular al anillo. */
+            border: 5px solid hsl(180, 100%, 50%);
+            border-radius: 50%;
+
+            /* El efecto de neón se logra con múltiples capas de box-shadow. */
+            box-shadow:
+                0 0 10px hsl(180, 100%, 50%),
+                0 0 20px hsl(180, 100%, 50%),
+                0 0 40px hsl(180, 100%, 50%),
+                inset 0 0 10px hsl(180, 100%, 50%),
+                inset 0 0 20px hsl(180, 100%, 50%);
+
+            /* * ¡AQUÍ OCURRE LA MAGIA!
+             * Aplicamos el filtro SVG que definimos más abajo en el HTML usando su ID (#wobble).
+             * Esto es lo que crea la deformación orgánica.
+             */
+            filter: url(#wobble);
+
+            /* Añadimos una animación sutil de rotación para más dinamismo. */
+            animation: spin 30s linear infinite;
+        }
+
+        /* Definición de la animación de rotación. */
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 
+     * HTML: La estructura visible.
+     * Solo necesitamos un div para representar el anillo.
+     */
+    -->
+    <div class="morphic-ring"></div>
+
+    <!--
+     * SVG: El motor de la distorsión.
+     * Este SVG no es visible (width="0" height="0"). Su única función es definir
+     * el filtro que usaremos en el CSS para deformar el anillo.
+    -->
+    <svg width="0" height="0">
+        <filter id="wobble">
+            <!-- 
+             * Paso 1: Generar un patrón de ruido orgánico y cambiante.
+             * feTurbulence crea una imagen de ruido tipo "nubes".
+            -->
+            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.03" numOctaves="3" result="turbulence">
+                <!-- 
+                 * Animamos la 'baseFrequency' del ruido para que el patrón de distorsión
+                 * cambie constantemente, creando un efecto fluido y vivo.
+                -->
+                <animate
+                    attributeName="baseFrequency"
+                    dur="15s"
+                    values="0.02 0.03; 0.04 0.02; 0.02 0.03"
+                    repeatCount="indefinite"
+                />
+            </feTurbulence>
+            
+            <!-- 
+             * Paso 2: Usar el ruido generado para desplazar los píxeles del anillo.
+             * feDisplacementMap toma el gráfico original (in="SourceGraphic") y lo deforma
+             * usando el mapa de ruido (in2="turbulence"). La propiedad 'scale' controla
+             * la intensidad de la deformación.
+            -->
+            <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="25" />
+        </filter>
+    </svg>
+
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toroide de Partículas con WebGL</title>
+    <style>
+        /* Estilos para el fondo y el canvas */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #000014 0%, #000000 100%);
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Estilos para el canvas donde se renderiza la escena 3D */
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            /* Efecto de brillo exterior aplicado a todo el canvas */
+            filter:
+                drop-shadow(0 0 5px #00ffdd)
+                drop-shadow(0 0 15px #33ffee)
+                drop-shadow(0 0 30px #00ccff);
+        }
+    </style>
+</head>
+<body>
+    <!-- El canvas es el lienzo donde Three.js dibujará la escena. -->
+    <canvas id="bg"></canvas>
+
+    <!-- 
+      Importamos la librería Three.js y el módulo OrbitControls.
+      'type="module"' es crucial para que los 'import' funcionen.
+      Cambiado a un CDN más robusto (jsdelivr).
+    -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // — Configuración de la Escena y el Renderizador —
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 4); // Posición inicial por defecto
+
+        const renderer = new THREE.WebGLRenderer({
+            canvas: document.querySelector('#bg'),
+            antialias: true,
+            alpha: true // Habilita la transparencia del fondo del canvas
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1;
+
+        // — Controles Orbitales (para rotar con el ratón) —
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // — Configuración del Campo de Partículas —
+        const N = 20000; // Número de partículas
+        const majorR = 1.0, minorR = 0.35; // Radios del toroide
+        let pos = new Float32Array(N * 3), // Array para posiciones (x,y,z)
+            vel = new Float32Array(N * 3), // Array para velocidades
+            color = new Float32Array(N * 3); // Array para colores (r,g,b)
+
+        const cnA = new THREE.Color(0x00ffcc); // Color inicial del gradiente
+        const cnB = new THREE.Color(0x3366ff); // Color final del gradiente
+
+        for (let i = 0; i < N; i++) {
+            const i3 = i * 3;
+            const u = Math.random() * Math.PI * 2;
+            const v = Math.random() * Math.PI * 4; // double-helix (doble hélice)
+
+            // Ecuaciones paramétricas para la posición inicial
+            const x = (majorR + minorR * Math.cos(v)) * Math.cos(u);
+            const y = (majorR + minorR * Math.cos(v)) * Math.sin(u);
+            const z = minorR * Math.sin(v);
+            pos.set([x, y, z], i3);
+
+            // Velocidad inicial para que las partículas fluyan
+            vel.set([
+                -Math.sin(u) * 0.0015,
+                Math.cos(u) * 0.0015,
+                Math.cos(v) * 0.0015
+            ], i3);
+            
+            // Asignación de color basado en la posición para crear un gradiente
+            let t = (v % (Math.PI * 2)) / (Math.PI * 2);
+            let c = cnA.clone().lerp(cnB, t);
+            color.set([c.r, c.g, c.b], i3);
+        }
+
+        // Creamos la geometría y le asignamos los atributos de posición y color
+        let geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(color, 3));
+
+        // Creamos el material para las partículas
+        let mat = new THREE.PointsMaterial({
+            size: 0.004,
+            vertexColors: true, // Usa los colores definidos en el atributo 'color'
+            transparent: true,
+            blending: THREE.AdditiveBlending, // Las partículas se suman al brillar
+            depthWrite: false, // Mejora el rendimiento para partículas transparentes
+            opacity: 0.8
+        });
+
+        const particles = new THREE.Points(geo, mat);
+        scene.add(particles);
+
+        // — Núcleo Brillante en el Centro —
+        const coreGeo = new THREE.SphereGeometry(0.25, 32, 32);
+        const coreMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffdd, transparent: true, opacity: 0.4, wireframe: true
+        });
+        scene.add(new THREE.Mesh(coreGeo, coreMat));
+
+        // — Sincronización del Pulso basado en BPM (Beats Per Minute) —
+        const bpmHz = 129 / 60; // Frecuencia del pulso en Hz
+
+        // — Bucle de Animación —
+        function animate(time = 0) {
+            requestAnimationFrame(animate);
+            const t = time * 0.001; // Tiempo en segundos
+
+            const posArr = geo.attributes.position.array;
+            const colArr = geo.attributes.color.array;
+
+            // Actualizamos la posición de cada partícula
+            for (let i = 0; i < N; i++) {
+                const i3 = i * 3;
+                posArr[i3] += vel[i3];
+                posArr[i3 + 1] += vel[i3 + 1];
+                posArr[i3 + 2] += vel[i3 + 2];
+
+                // Si una partícula se aleja demasiado, la reiniciamos en una nueva posición
+                if (posArr[i3] ** 2 + posArr[i3 + 1] ** 2 + posArr[i3 + 2] ** 2 > (majorR + minorR + 0.2) ** 2) {
+                    const u = Math.random() * Math.PI * 2;
+                    const v = Math.random() * Math.PI * 4;
+                    const x = (majorR + minorR * Math.cos(v)) * Math.cos(u);
+                    const y = (majorR + minorR * Math.cos(v)) * Math.sin(u);
+                    const z = minorR * Math.sin(v);
+                    posArr.set([x, y, z], i3);
+                    vel.set([
+                        -Math.sin(u) * 0.0015,
+                        Math.cos(u) * 0.0015,
+                        Math.cos(v) * 0.0015
+                    ], i3);
+                    let ct = (v % (Math.PI * 2)) / (Math.PI * 2);
+                    let clr = cnA.clone().lerp(cnB, ct);
+                    colArr.set([clr.r, clr.g, clr.b], i3);
+                }
+            }
+            geo.attributes.position.needsUpdate = true;
+            geo.attributes.color.needsUpdate = true;
+
+            // — Animación del Pulso (tamaño y brillo) —
+            const pulse = 0.5 + 0.5 * Math.sin(Math.PI * bpmHz * t);
+            mat.size = 0.004 + 0.012 * pulse;
+            coreMat.opacity = 0.2 + 0.2 * pulse;
+
+            // — Rotación Sutil y Renderizado —
+            particles.rotation.y += 0.0006;
+            controls.update(); // Actualiza los controles orbitales
+            renderer.render(scene, camera);
+        }
+        
+        // — Manejo del Redimensionamiento de la Ventana (LÓGICA MEJORADA) —
+        function handleResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // 1. Actualizar tamaño del renderizador y aspect ratio de la cámara
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+
+            // 2. LÓGICA RESPONSIVA: Alejar la cámara en pantallas pequeñas
+            if (width < 768) {
+                camera.position.z = 6; // Más lejos en móviles
+            } else {
+                camera.position.z = 4; // Posición estándar en escritorio
+            }
+
+            // 3. Aplicar los cambios a la cámara
+            camera.updateProjectionMatrix();
+        }
+
+        window.addEventListener('resize', handleResize);
+
+        // Llamamos a la función una vez al inicio para establecer el estado correcto
+        handleResize(); 
+        
+        // Iniciar la animación
+        animate();
+    </script>
+</body>
+</html>

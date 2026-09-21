@@ -1,0 +1,36 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# === Virtual Environments ===
+.venv/
+venv/
+ENV/
+
+# === PyInstaller ===
+build/
+dist/
+*.spec
+
+# === Logs ===
+.logs/
+*.log
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# === Misc ===
+*.egg-info/
+*.egg
+.env

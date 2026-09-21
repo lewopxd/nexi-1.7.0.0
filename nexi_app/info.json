@@ -1,0 +1,39 @@
+{
+  "nexi_version": "N/A",
+  "main_path": "C:\\Users\\lynda\\OneDrive\\Escritorio\\leo\\Programing_2025\\Nexi_py\\nexi-1.6.0.0\\nexi_app",
+  "requirements": {},
+  "dev_environment": {
+    "development_versions": {
+      "python": "3.13.6",
+      "pip": "25.2"
+    },
+    "system_environment": {
+      "os": {
+        "nombre": "Microsoft Windows 11 Home Single Language",
+        "version": "10.0.22631",
+        "arquitectura": "x64-based PC"
+      },
+      "hardware": {
+        "fabricante": "LENOVO",
+        "modelo": "82KT",
+        "procesador": "AMD Ryzen 5 5500U with Radeon Graphics",
+        "ram": {
+          "size_gb": 5.85
+        },
+        "gpu": {
+          "name": "AMD Radeon(TM) Graphics",
+          "vram_gb": -2.0
+        },
+        "storage": [
+          {
+            "model": "INTEL SSDPEKNW512GZL",
+            "size_gb": 476.94
+          }
+        ]
+      },
+      "configuracion": {
+        "region": "34"
+      }
+    }
+  }
+}

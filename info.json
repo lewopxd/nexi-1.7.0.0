@@ -1,0 +1,47 @@
+{
+  "nexi_version": "1.6.0",
+  "main_path": "C:\\Users\\lynda\\OneDrive\\Escritorio\\leo\\Programing_2025\\Nexi_py\\nexi-1.6.0.0",
+  "requirements": {
+    "psutil": "7.0.0",
+    "PySide6": "6.9.1",
+    "PySide6_Addons": "6.9.1",
+    "PySide6_Essentials": "6.9.1",
+    "pywin32": "311",
+    "shiboken6": "6.9.1",
+    "WMI": "1.5.1"
+  },
+  "dev_environment": {
+    "development_versions": {
+      "python": "3.13.6",
+      "pip": "25.2"
+    },
+    "system_environment": {
+      "os": {
+        "nombre": "Microsoft Windows 11 Pro",
+        "version": "10.0.26200",
+        "arquitectura": "x64-based PC"
+      },
+      "hardware": {
+        "fabricante": "LENOVO",
+        "modelo": "82KT",
+        "procesador": "AMD Ryzen 5 5500U with Radeon Graphics",
+        "ram": {
+          "size_gb": 5.85
+        },
+        "gpu": {
+          "name": "AMD Radeon(TM) Graphics",
+          "vram_gb": -2.0
+        },
+        "storage": [
+          {
+            "model": "INTEL SSDPEKNW512GZL",
+            "size_gb": 476.94
+          }
+        ]
+      },
+      "configuracion": {
+        "region": "34"
+      }
+    }
+  }
+}

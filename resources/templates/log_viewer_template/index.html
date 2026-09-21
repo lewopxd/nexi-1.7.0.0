@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Log Viewer - Nexi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-main">
+    <div class="app-title">
+      <span class="title-main">📋 Nexi Assistant</span>
+      <span class="title-version">v1.0.0</span>
+    </div>
+    <button id="load-btn" class="load-btn">Cargar archivo</button>
+  </div>
+
+  <div id="system-meta" style="display:none;">
+    <div class="system-info">Sistema</div>
+    <div class="meta-grid" id="meta-grid"></div>
+  </div>
+</header>
+
+<!-- === MENSAJE INICIAL Y CARGA === -->
+<div id="initial-message" class="initial-message">
+  <p>📄 Please load .logs file</p>
+</div>
+
+<div id="loading-indicator" class="loading-indicator" style="display: none;">
+  <div class="spinner"></div>
+  <p>Loading logs...</p>
+</div>
+<!-- Filtros -->
+<div class="filters-wrapper" id="filters-wrapper-main" style="visibility: hidden">
+  <div class="filters-container">
+    <!-- Barra de búsqueda -->
+    <div class="search-box">
+      <input
+              type="text"
+              id="search-input"
+              placeholder="🔍 Buscar en logs..."
+              class="search-input"
+      >
+    </div>
+
+    <!-- Filtros por tipo -->
+    <div class="type-filters">
+      <label class="filter-tag">
+        <input type="checkbox" value="INFO" checked>
+        <span class="tag type-info">[INFO]</span>
+      </label>
+      <label class="filter-tag">
+        <input type="checkbox" value="ERROR" checked>
+        <span class="tag type-error">[ERROR]</span>
+      </label>
+      <label class="filter-tag">
+        <input type="checkbox" value="ALERT" checked>
+        <span class="tag type-alert">[ALERT]</span>
+      </label>
+      <label class="filter-tag">
+        <input type="checkbox" value="NOTE" checked>
+        <span class="tag type-note">[NOTE]</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+
+<!-- Tabla de logs -->
+<div class="table-container" id="table-container-main" style="visibility: hidden">
+  <table id="logs-table">
+    <thead>
+    <tr>
+      <th data-col="num">#</th>
+      <th data-col="sid">SID</th>
+      <th data-col="type">Tipo</th>
+      <th data-col="timestamp">Timestamp</th>
+      <th data-col="origin">Origen</th>
+      <th data-col="file">Archivo</th>
+      <th data-col="message">Mensaje</th>
+    </tr>
+    </thead>
+    <tbody id="logs"></tbody>
+  </table>
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

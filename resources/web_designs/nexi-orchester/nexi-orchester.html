@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexi Orchester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        ::selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
+        ::-moz-selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
+        html, body { height: 100%; width: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background-color: transparent !important; overflow: hidden !important; }
+        #nexi-scene-container { width: 100vw; height: 100vh; position: relative; background: transparent; overflow: hidden; margin: 0; padding: 0; }
+        
+        .nexi-draggable-container {
+            position: absolute;
+            outline: none !important;
+            border: none !important;
+            background: transparent !important;
+            -webkit-tap-highlight-color: transparent !important;
+        }
+        .nexi-draggable-container:hover,
+        .nexi-draggable-container:focus,
+        .nexi-draggable-container:active {
+            outline: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+        .nexi-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none !important;
+            outline: none !important;
+            background-color: transparent !important;
+            -webkit-user-drag: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        
+        .nexi-shape-rect { border-radius: 16px; overflow: hidden; }
+        .nexi-shape-square { aspect-ratio: 1 / 1; overflow: hidden; }
+        .nexi-shape-circle { border-radius: 50%; aspect-ratio: 1 / 1; overflow: hidden; }
+        
+        .nexi-size-xxs { width: 8%; } .nexi-size-xs { width: 12%; } .nexi-size-s { width: 18%; } .nexi-size-m { width: 25%; } .nexi-size-l { width: 35%; } .nexi-size-xl { width: 45%; } .nexi-size-xxl { width: 60%; }
+        .nexi-shape-rect.nexi-size-xxs { height: 5%; } .nexi-shape-rect.nexi-size-xs { height: 8%; } .nexi-shape-rect.nexi-size-s { height: 12%; } .nexi-shape-rect.nexi-size-m { height: 16%; } .nexi-shape-rect.nexi-size-l { height: 23%; } .nexi-shape-rect.nexi-size-xl { height: 30%; } .nexi-shape-rect.nexi-size-xxl { height: 40%; }
+        
+        .nexi-pos-top-left { top: 20px; left: 20px; } .nexi-pos-top-center { top: 20px; left: 50%; transform: translateX(-50%); } .nexi-pos-top-right { top: 20px; right: 20px; }
+        .nexi-pos-center-left { top: 50%; left: 20px; transform: translateY(-50%); } .nexi-pos-center-center{ top: 50%; left: 50%; transform: translate(-50%, -50%); } .nexi-pos-center-right { top: 50%; right: 20px; transform: translateY(-50%); }
+        .nexi-pos-bottom-left { bottom: 20px; left: 20px; } .nexi-pos-bottom-center{ bottom: 20px; left: 50%; transform: translateX(-50%); } .nexi-pos-bottom-right { bottom: 20px; right: 20px; }
+
+        /* --- PERSONAJE 2: BOTÓN DE ARRASTRE SÓLIDO Y EXTERIOR A LA ESFERA --- */
+        #nexi-character_drag_handle {
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #0c121e; /* 100% Sólido y opaco */
+            border: 1.5px solid #00d5ff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 213, 255, 0.4);
+            cursor: grab;
+            z-index: 25;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease, background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        #nexi-character_drag_handle.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #nexi-character_drag_handle:hover {
+            background: #152236; /* Sólido más claro en hover, NADA de transparencia */
+            border-color: #00ffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.95), 0 0 12px rgba(0, 213, 255, 0.7);
+            transform: scale(1.1);
+        }
+        #nexi-character_drag_handle.dragging {
+            cursor: grabbing !important;
+            background: #0f2b20 !important; /* Sólido esmeralda al arrastrar */
+            border-color: #00ff88 !important;
+            box-shadow: 0 0 14px rgba(0, 255, 136, 0.8) !important;
+            transform: scale(1.15) !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        #nexi-character_drag_handle svg {
+            width: 14px;
+            height: 14px;
+            fill: #00d5ff;
+            pointer-events: none;
+            transition: fill 0.15s ease;
+        }
+        #nexi-character_drag_handle:hover svg {
+            fill: #ffffff;
+        }
+        #nexi-character_drag_handle.dragging svg {
+            fill: #00ff88;
+        }
+
+        /* --- PERSONAJE 3: MENÚ CONTEXTUAL PERSONALIZADO (CLIC DERECHO) --- */
+        #nexi-character_context_menu {
+            position: absolute;
+            width: 185px;
+            background: rgba(10, 14, 24, 0.95);
+            border: 1px solid rgba(0, 213, 255, 0.4);
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.85), 0 0 14px rgba(0, 213, 255, 0.25);
+            backdrop-filter: blur(16px);
+            padding: 6px 0;
+            z-index: 35;
+            user-select: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+        #nexi-character_context_menu.is-hidden {
+            opacity: 0;
+            transform: scale(0.92);
+            pointer-events: none;
+        }
+        .context-header {
+            padding: 6px 12px 4px 12px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #00d5ff;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+        }
+        .context-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            color: #e0f7fc;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .context-item:hover {
+            background: rgba(0, 213, 255, 0.18);
+            color: #00d5ff;
+        }
+        .context-item.danger:hover {
+            background: rgba(255, 77, 77, 0.18);
+            color: #ff5577;
+        }
+        .context-icon {
+            width: 15px;
+            height: 15px;
+            fill: currentColor;
+            flex-shrink: 0;
+        }
+        .context-divider {
+            height: 1px;
+            background: rgba(0, 213, 255, 0.15);
+            margin: 4px 0;
+        }
+
+        /* --- PERSONAJE 4: CONTENEDOR DEL PANEL DE CONFIGURACIÓN --- */
+        #nexi-character_panel_config {
+            position: absolute;
+            width: 320px;
+            height: 440px;
+            border-radius: 14px;
+            z-index: 30;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+        #nexi-character_panel_config.is-hidden {
+            opacity: 0;
+            transform: scale(0.92);
+            pointer-events: none;
+        }
+        .nexi-iframe-panel {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            border-radius: 14px;
+        }
+    </style>
+    <!-- Script NexiBus para el orquestador -->
+    <script src="js/nexi_bus.js"></script>
+</head>
+<body>
+
+    <main id="nexi-scene-container">
+        <!-- PERSONAJE 1: Esfera Nexi (Sin interferencias visuales en hover) -->
+        <div id="nexi-character_01" class="nexi-draggable-container nexi-shape-circle nexi-size-xxs nexi-pos-bottom-right">
+            <iframe
+                id="iframe-sphere"
+                class="nexi-iframe"
+                src="../sphere/sphere_webgl_identical.html"
+                title="Nexi Character View">
+            </iframe>
+        </div>
+
+        <!-- PERSONAJE 2: Botón de Arrastre Exterior (Sólido y Elegante) -->
+        <div id="nexi-character_drag_handle" class="nexi-shape-circle" title="Arrastrar Nexi">
+            <svg viewBox="0 0 24 24">
+                <path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"/>
+            </svg>
+        </div>
+
+        <!-- PERSONAJE 3: Menú Contextual de Clic Derecho -->
+        <div id="nexi-character_context_menu" class="nexi-context-menu is-hidden">
+            <div class="context-header">
+                <span class="context-title">Nexi // Opciones</span>
+            </div>
+            <div class="context-item" id="menu-opt-config">
+                <svg class="context-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                <span>Configurar Esfera</span>
+            </div>
+            <div class="context-item" id="menu-opt-reset-pos">
+                <svg class="context-icon" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+                <span>Centrar Posición</span>
+            </div>
+            <div class="context-divider"></div>
+            <div class="context-item danger" id="menu-opt-close">
+                <svg class="context-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                <span>Cerrar Menú</span>
+            </div>
+        </div>
+
+        <!-- PERSONAJE 4: Panel de Configuración -->
+        <div id="nexi-character_panel_config" class="is-hidden">
+            <iframe
+                id="iframe-config"
+                class="nexi-iframe-panel"
+                src="config_panel.html"
+                title="Nexi Configuration Panel">
+            </iframe>
+        </div>
+    </main>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const sphereContainer = document.getElementById('nexi-character_01');
+        const dragHandle = document.getElementById('nexi-character_drag_handle');
+        const mainContainer = document.getElementById('nexi-scene-container');
+        const contextMenu = document.getElementById('nexi-character_context_menu');
+        const panelConfig = document.getElementById('nexi-character_panel_config');
+
+        // Inicializar NexiBus como Broker central
+        const bus = new NexiBus('orchester', { isBroker: true, debug: false });
+        window.orchesterBus = bus;
+
+        let isMenuOpen = false;
+        let isConfigOpen = false;
+        let isDragging = false;
+        let dragOffsetSphereX = 0, dragOffsetSphereY = 0;
+
+        // Desactivar menú nativo de Chromium
+        window.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+
+        // Posicionar el botón de arrastre por fuera de la esfera (lateral superior derecho)
+        function updateHandlePosition() {
+            const sphereRect = sphereContainer.getBoundingClientRect();
+            const parentRect = mainContainer.getBoundingClientRect();
+
+            const sphereLeft = sphereRect.left - parentRect.left;
+            const sphereTop = sphereRect.top - parentRect.top;
+            const sphereWidth = sphereRect.width;
+
+            // Situado a la derecha de la parte superior de la esfera, flotando justo al lado
+            dragHandle.style.left = `${sphereLeft + sphereWidth - 14}px`;
+            dragHandle.style.top = `${sphereTop - 10}px`;
+        }
+
+        // ---------------------------------------------------------------------
+        // GESTIÓN DE VISIBILIDAD DINÁMICA DEL BOTÓN DE ARRASTRE (SOLO EN HOVER)
+        // ---------------------------------------------------------------------
+        let isSphereHovered = false;
+        let isHandleHovered = false;
+        let hideHandleTimer = null;
+
+        function showDragHandle() {
+            if (hideHandleTimer) {
+                clearTimeout(hideHandleTimer);
+                hideHandleTimer = null;
+            }
+            dragHandle.classList.add('visible');
+        }
+
+        function scheduleHideDragHandle(delay = 350) {
+            if (isDragging || isMenuOpen || isConfigOpen) return;
+            if (hideHandleTimer) clearTimeout(hideHandleTimer);
+            hideHandleTimer = setTimeout(() => {
+                if (!isDragging && !isMenuOpen && !isConfigOpen && !isSphereHovered && !isHandleHovered) {
+                    dragHandle.classList.remove('visible');
+                }
+            }, delay);
+        }
+
+        // Hover directo sobre el contenedor de la esfera
+        sphereContainer.addEventListener('mouseenter', () => {
+            isSphereHovered = true;
+            showDragHandle();
+        });
+
+        sphereContainer.addEventListener('mouseleave', () => {
+            isSphereHovered = false;
+            scheduleHideDragHandle(350);
+        });
+
+        // Hover directo sobre el propio botón satélite
+        dragHandle.addEventListener('pointerenter', () => {
+            isHandleHovered = true;
+            showDragHandle();
+        });
+
+        dragHandle.addEventListener('pointerleave', () => {
+            isHandleHovered = false;
+            scheduleHideDragHandle(250);
+        });
+
+        // Comunicación vía NexiBus desde el iframe de la esfera
+        bus.on('SPHERE_HOVER', async (payload) => {
+            isSphereHovered = !!(payload && payload.hovering);
+            if (isSphereHovered) {
+                showDragHandle();
+            } else {
+                scheduleHideDragHandle(350);
+            }
+            return { handled: true };
+        });
+
+        // Método de respaldo para llamadas directas
+        window.onSphereHoverChange = function(hovering) {
+            isSphereHovered = !!hovering;
+            if (isSphereHovered) {
+                showDragHandle();
+            } else {
+                scheduleHideDragHandle(350);
+            }
+        };
+
+        // ---------------------------------------------------------------------
+        // GESTIÓN DEL MENÚ CONTEXTUAL
+        // ---------------------------------------------------------------------
+        function openContextMenu(clientX, clientY) {
+            if (isConfigOpen) closeConfigPanel();
+
+            isMenuOpen = true;
+            const parentRect = mainContainer.getBoundingClientRect();
+            const menuWidth = 185;
+            const menuHeight = 135;
+
+            let left = clientX;
+            let top = clientY;
+
+            if (left + menuWidth > parentRect.width) left = parentRect.width - menuWidth - 10;
+            if (top + menuHeight > parentRect.height) top = parentRect.height - menuHeight - 10;
+            if (left < 10) left = 10;
+            if (top < 10) top = 10;
+
+            contextMenu.style.left = `${left}px`;
+            contextMenu.style.top = `${top}px`;
+            contextMenu.classList.remove('is-hidden');
+
+            // Actualizar máscaras y cambiar a Escena 2 (Esfera + Botón + Menú Contextual)
+            if (typeof send_update_request === 'function') {
+                send_update_request(1);
+                setTimeout(() => {
+                    if (typeof send_change_request === 'function') {
+                        send_change_request("2");
+                    }
+                }, 40);
+            }
+        }
+
+        function closeContextMenu() {
+            if (!isMenuOpen) return;
+            isMenuOpen = false;
+            contextMenu.classList.add('is-hidden');
+
+            // Volver a Escena 1 (Esfera + Botón de Arrastre)
+            if (!isConfigOpen && typeof send_change_request === 'function') {
+                send_change_request("1");
+            }
+        }
+
+        // Clic derecho sobre la esfera en el orquestador
+        sphereContainer.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openContextMenu(e.clientX, e.clientY);
+        });
+
+        // Clic derecho notificado por el iframe de la esfera
+        window.openNexiContextMenu = function(clientX, clientY) {
+            openContextMenu(clientX, clientY);
+        };
+
+        bus.on('OPEN_CONTEXT_MENU', async (payload) => {
+            const sphereRect = sphereContainer.getBoundingClientRect();
+            const clickX = sphereRect.left + (payload.clientX || (sphereRect.width / 2));
+            const clickY = sphereRect.top + (payload.clientY || (sphereRect.height / 2));
+            openContextMenu(clickX, clickY);
+            return { opened: true };
+        });
+
+        // Opciones del Menú Contextual
+        document.getElementById('menu-opt-config').addEventListener('click', () => {
+            closeContextMenu();
+            openConfigPanel();
+        });
+
+        document.getElementById('menu-opt-reset-pos').addEventListener('click', () => {
+            closeContextMenu();
+            sphereContainer.style.transform = 'translate(-50%, -50%)';
+            sphereContainer.style.left = '50%';
+            sphereContainer.style.top = '50%';
+            sphereContainer.style.right = 'auto';
+            sphereContainer.style.bottom = 'auto';
+            updateHandlePosition();
+            if (typeof send_update_request === 'function') {
+                send_update_request(1);
+            }
+        });
+
+        document.getElementById('menu-opt-close').addEventListener('click', () => {
+            closeContextMenu();
+        });
+
+        // ---------------------------------------------------------------------
+        // GESTIÓN DEL PANEL DE CONFIGURACIÓN
+        // ---------------------------------------------------------------------
+        function openConfigPanel() {
+            isConfigOpen = true;
+            const sphereRect = sphereContainer.getBoundingClientRect();
+            const parentRect = mainContainer.getBoundingClientRect();
+
+            const panelWidth = 320;
+            const panelHeight = 440;
+
+            let panelLeft = (sphereRect.left - parentRect.left) - panelWidth - 16;
+            if (panelLeft < 10) {
+                panelLeft = (sphereRect.left - parentRect.left) + sphereRect.width + 16;
+            }
+            if (panelLeft + panelWidth > parentRect.width) {
+                panelLeft = parentRect.width - panelWidth - 10;
+            }
+
+            let panelTop = (sphereRect.top - parentRect.top) + (sphereRect.height / 2) - (panelHeight / 2);
+            if (panelTop < 10) panelTop = 10;
+            if (panelTop + panelHeight > parentRect.height) {
+                panelTop = parentRect.height - panelHeight - 10;
+            }
+
+            panelConfig.style.left = `${panelLeft}px`;
+            panelConfig.style.top = `${panelTop}px`;
+            panelConfig.classList.remove('is-hidden');
+
+            // Actualizar máscaras y cambiar a Escena 3 (Esfera + Botón + Panel Config)
+            if (typeof send_update_request === 'function') {
+                send_update_request(1);
+                setTimeout(() => {
+                    if (typeof send_change_request === 'function') {
+                        send_change_request("3");
+                    }
+                }, 40);
+            }
+        }
+
+        function closeConfigPanel() {
+            if (!isConfigOpen) return;
+            isConfigOpen = false;
+            panelConfig.classList.add('is-hidden');
+
+            // Volver a Escena 1 (Esfera + Botón)
+            if (typeof send_change_request === 'function') {
+                send_change_request("1");
+            }
+        }
+
+        bus.on('CLOSE_CONFIG', async () => {
+            closeConfigPanel();
+            return { closed: true };
+        });
+
+        // ---------------------------------------------------------------------
+        // SISTEMA DE ARRASTRE EXCLUSIVO DESDE EL BOTÓN EXTERIOR
+        // ---------------------------------------------------------------------
+        const sphereIframe = document.getElementById('iframe-sphere');
+
+        dragHandle.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return; // Solo clic principal (izquierdo)
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Bloquear puntero al botón para rastreo ultra-fluido en toda la pantalla
+            try {
+                dragHandle.setPointerCapture(e.pointerId);
+            } catch (err) {}
+
+            // Evitar y purgar cualquier selección accidental nativa de Chromium
+            if (window.getSelection) {
+                window.getSelection().removeAllRanges();
+            }
+
+            // Desactivar temporalmente los eventos del iframe durante el arrastre:
+            // Esto previene que Chromium seleccione el iframe (lo que creaba la capa azul)
+            // y evita que el iframe devore eventos mousemove/mouseup.
+            if (sphereIframe) {
+                sphereIframe.style.pointerEvents = 'none';
+            }
+
+            closeContextMenu();
+            if (isConfigOpen) closeConfigPanel();
+
+            if (typeof window.notify_drag_start === 'function') {
+                window.notify_drag_start();
+            }
+
+            isDragging = true;
+            dragHandle.classList.add('dragging');
+
+            const sphereRect = sphereContainer.getBoundingClientRect();
+            const parentRect = mainContainer.getBoundingClientRect();
+
+            sphereContainer.style.transform = 'none';
+            sphereContainer.style.right = 'auto';
+            sphereContainer.style.bottom = 'auto';
+            sphereContainer.style.left = `${sphereRect.left - parentRect.left}px`;
+            sphereContainer.style.top = `${sphereRect.top - parentRect.top}px`;
+
+            dragOffsetSphereX = e.clientX - (sphereRect.left - parentRect.left);
+            dragOffsetSphereY = e.clientY - (sphereRect.top - parentRect.top);
+
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('pointercancel', onPointerUp);
+        });
+
+        function onPointerMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const parentRect = mainContainer.getBoundingClientRect();
+            const sphereRect = sphereContainer.getBoundingClientRect();
+
+            let newSphereLeft = e.clientX - dragOffsetSphereX;
+            let newSphereTop = e.clientY - dragOffsetSphereY;
+
+            if (newSphereLeft < 10) newSphereLeft = 10;
+            if (newSphereTop < 10) newSphereTop = 10;
+            if (newSphereLeft + sphereRect.width > parentRect.width - 10) newSphereLeft = parentRect.width - sphereRect.width - 10;
+            if (newSphereTop + sphereRect.height > parentRect.height - 10) newSphereTop = parentRect.height - sphereRect.height - 10;
+
+            sphereContainer.style.left = `${newSphereLeft}px`;
+            sphereContainer.style.top = `${newSphereTop}px`;
+
+            // Mover el botón satélite en perfecta sincronía
+            dragHandle.style.left = `${newSphereLeft + sphereRect.width - 14}px`;
+            dragHandle.style.top = `${newSphereTop - 10}px`;
+        }
+
+        function onPointerUp(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            dragHandle.classList.remove('dragging');
+
+            try {
+                if (e && e.pointerId !== undefined) {
+                    dragHandle.releasePointerCapture(e.pointerId);
+                }
+            } catch (err) {}
+
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+            window.removeEventListener('pointercancel', onPointerUp);
+
+            // Reactivar inmediatamente los eventos del iframe para que la esfera 3D pueda ser rotada/inspeccionada
+            if (sphereIframe) {
+                sphereIframe.style.pointerEvents = 'auto';
+            }
+
+            // Purgar cualquier residuo de selección en el navegador
+            if (window.getSelection) {
+                window.getSelection().removeAllRanges();
+            }
+
+            if (typeof window.notify_drag_end === 'function') {
+                window.notify_drag_end();
+            }
+
+            if (!isSphereHovered && !isHandleHovered) {
+                scheduleHideDragHandle(350);
+            }
+        }
+
+        // Posicionamiento inicial coordinado
+        setTimeout(updateHandlePosition, 80);
+        window.addEventListener('resize', updateHandlePosition);
+    });
+    </script>
+
+</body>
+</html>

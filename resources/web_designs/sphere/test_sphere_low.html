@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esfera de Prueba</title>
+    <style>
+        /* Reseteo básico para ocupar toda la pantalla sin márgenes */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Evita barras de scroll inesperadas */
+            background-color: #1a1a1a00; /* Fondo oscuro para contraste */
+        }
+
+        /* Contenedor que ocupa el 100% de la altura y centra su contenido */
+        #container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh; /* Ocupa el 100% de la altura del viewport */
+        }
+
+        /* La esfera (un div circular con un gradiente para el efecto 3D) */
+        #sphere {
+            /* El tamaño es el 80% de la altura del viewport para que no toque los bordes */
+            width: 98vh;
+            height: 98vh;
+            
+            /* La magia para hacerlo un círculo */
+            border-radius: 50%;
+            
+            /* Gradiente radial simple para simular luz y dar volumen */
+            background: radial-gradient(circle at 30% 30%, #ae0404, #f7056a);
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sphere"></div>
+    </div>
+</body>
+</html>
